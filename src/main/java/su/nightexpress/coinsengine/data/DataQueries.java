@@ -1,28 +1,27 @@
 package su.nightexpress.coinsengine.data;
 
-import com.google.gson.reflect.TypeToken;
-import org.jetbrains.annotations.NotNull;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
-import su.nightexpress.coinsengine.data.impl.CurrencySettings;
+import org.jspecify.annotations.NonNull;
+import su.nightexpress.coinsengine.user.CoinsUser;
 import su.nightexpress.coinsengine.user.UserBalance;
+import su.nightexpress.coinsengine.user.data.CurrencySettings;
+import su.nightexpress.nightcore.db.statement.RowMapper;
+import su.nightexpress.nightcore.db.statement.template.InsertStatement;
+import su.nightexpress.nightcore.db.statement.template.SelectStatement;
+import su.nightexpress.nightcore.db.statement.template.UpdateStatement;
 
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Function;
 
 public class DataQueries {
 
-    @NotNull
-    public static UserBalance readBalance(@NotNull ResultSet resultSet) {
+    public static final RowMapper<UserBalance> USER_BALANCE = resultSet -> {
         UserBalance balance = new UserBalance();
 
-        DataHandler.CURRENCY_COLUMNS.forEach((id, column) -> {
+        DataColumns.currencies().forEach((id, column) -> {
             try {
-                double amount = resultSet.getDouble(column.getName());
-                balance.add(id, amount);
+                balance.add(id, column.readOrThrow(resultSet));
             }
             catch (SQLException exception) {
                 exception.printStackTrace();
@@ -30,27 +29,68 @@ public class DataQueries {
         });
 
         return balance;
-    }
+    };
 
-    public static final Function<ResultSet, CoinsUser> USER_LOADER = resultSet -> {
+    public static final RowMapper<CoinsUser> USER_LOADER = resultSet -> {
         try {
-            UUID uuid = UUID.fromString(resultSet.getString(DataHandler.COLUMN_USER_ID.getName()));
-            String name = resultSet.getString(DataHandler.COLUMN_USER_NAME.getName());
-            long dateCreated = resultSet.getLong(DataHandler.COLUMN_USER_DATE_CREATED.getName());
-            long lastOnline = resultSet.getLong(DataHandler.COLUMN_USER_LAST_ONLINE.getName());
+            UUID uuid = DataColumns.USER_UUID.readOrThrow(resultSet);
+            String name = DataColumns.USER_NAME.readOrThrow(resultSet);
+            Map<String, CurrencySettings> settingsMap = DataColumns.USER_SETTINGS.readOrThrow(resultSet);
 
-            Map<String, CurrencySettings> settingsMap = DataHandler.GSON.fromJson(resultSet.getString(DataHandler.COLUMN_SETTINGS.getName()), new TypeToken<Map<String, CurrencySettings>>(){}.getType());
-            if (settingsMap == null) settingsMap = new HashMap<>();
+            long lastSeen = DataColumns.USER_LAST_SEEN.readOrThrow(resultSet);
+            boolean hiddenFromTops = DataColumns.USER_HIDE_FROM_TOPS.readOrThrow(resultSet);
 
-            UserBalance balance = readBalance(resultSet);
+            UserBalance balance = Optional.ofNullable(USER_BALANCE.map(resultSet)).orElse(new UserBalance());
 
-            boolean hiddenFromTops = resultSet.getBoolean(DataHandler.COLUMN_HIDE_FROM_TOPS.getName());
-
-            return new CoinsUser(uuid, name, dateCreated, lastOnline, balance, settingsMap, hiddenFromTops);
+            return new CoinsUser(uuid, name, balance, settingsMap, lastSeen, hiddenFromTops);
         }
         catch (SQLException exception) {
             exception.printStackTrace();
             return null;
         }
     };
+
+    @NonNull
+    public static SelectStatement<CoinsUser> userSelect() {
+        return SelectStatement.builder(DataQueries.USER_LOADER).build();
+    }
+
+    @NonNull
+    public static InsertStatement<CoinsUser> userInsert() {
+        var builder = InsertStatement.<CoinsUser>builder()
+            .setUUID(DataColumns.USER_UUID, CoinsUser::getId)
+            .setString(DataColumns.USER_NAME, CoinsUser::getName)
+            .setString(DataColumns.USER_SETTINGS, user -> DataHandler.GSON.toJson(user.getSettingsMap()))
+            .setLong(DataColumns.USER_LAST_SEEN, CoinsUser::getLastSeen)
+            .setBoolean(DataColumns.USER_HIDE_FROM_TOPS, CoinsUser::isHiddenFromTops);
+
+        DataColumns.currencies().forEach((id, column) -> {
+            builder.setDouble(column, user -> user.getBalance().get(id));
+        });
+
+        return builder.build();
+    }
+
+    @NonNull
+    public static UpdateStatement<CoinsUser> userUpdate() {
+        var builder = UpdateStatement.<CoinsUser>builder()
+            .setString(DataColumns.USER_NAME, CoinsUser::getName)
+            .setString(DataColumns.USER_SETTINGS, user -> DataHandler.GSON.toJson(user.getSettingsMap()))
+            .setLong(DataColumns.USER_LAST_SEEN, CoinsUser::getLastSeen)
+            .setBoolean(DataColumns.USER_HIDE_FROM_TOPS, CoinsUser::isHiddenFromTops);
+
+        DataColumns.currencies().forEach((id, column) -> {
+            builder.setDouble(column, user -> user.getBalance().get(id));
+        });
+
+        return builder.build();
+    }
+
+    @NonNull
+    public static UpdateStatement<CoinsUser> userTinyUpdate() {
+        return UpdateStatement.<CoinsUser>builder()
+            .setString(DataColumns.USER_NAME, CoinsUser::getName)
+            .setLong(DataColumns.USER_LAST_SEEN, CoinsUser::getLastSeen)
+            .build();
+    }
 }

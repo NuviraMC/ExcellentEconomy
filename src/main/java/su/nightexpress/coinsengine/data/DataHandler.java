@@ -2,130 +2,70 @@ package su.nightexpress.coinsengine.data;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.api.currency.Currency;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
-import su.nightexpress.coinsengine.data.impl.CurrencySettings;
-import su.nightexpress.coinsengine.data.serialize.CurrencySettingsSerializer;
-import su.nightexpress.nightcore.db.AbstractUserDataManager;
-import su.nightexpress.nightcore.db.sql.column.Column;
-import su.nightexpress.nightcore.db.sql.column.ColumnType;
-import su.nightexpress.nightcore.db.sql.query.impl.SelectQuery;
-import su.nightexpress.nightcore.db.sql.query.impl.UpdateQuery;
-import su.nightexpress.nightcore.db.sql.query.type.ValuedQuery;
-import su.nightexpress.nightcore.util.Lists;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
+import su.nightexpress.coinsengine.user.CoinsUser;
+import su.nightexpress.coinsengine.user.data.CurrencySettings;
+import su.nightexpress.coinsengine.user.data.CurrencySettingsSerializer;
+import su.nightexpress.nightcore.db.AbstractDatabaseManager;
+import su.nightexpress.nightcore.db.column.Column;
+import su.nightexpress.nightcore.db.statement.condition.Operator;
+import su.nightexpress.nightcore.db.statement.condition.Wheres;
+import su.nightexpress.nightcore.db.statement.template.InsertStatement;
+import su.nightexpress.nightcore.db.statement.template.SelectStatement;
+import su.nightexpress.nightcore.db.statement.template.UpdateStatement;
+import su.nightexpress.nightcore.db.table.Table;
+import su.nightexpress.nightcore.user.data.UserDataSchema;
+import su.nightexpress.nightcore.util.TimeUtil;
 
-import java.sql.ResultSet;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
+import java.util.Set;
+import java.util.UUID;
 
-public class DataHandler extends AbstractUserDataManager<CoinsEnginePlugin, CoinsUser> {
+public class DataHandler extends AbstractDatabaseManager<CoinsEnginePlugin> implements UserDataSchema<CoinsUser> {
 
-    static final Gson GSON = new GsonBuilder().setPrettyPrinting()
+    public static final Gson GSON = new GsonBuilder().setPrettyPrinting()
         .registerTypeAdapter(CurrencySettings.class, new CurrencySettingsSerializer())
         .create();
 
-    static final Column COLUMN_SETTINGS       = Column.of("settings", ColumnType.STRING);
-    static final Column COLUMN_HIDE_FROM_TOPS = Column.of("hiddenFromTops", ColumnType.BOOLEAN);
-
-    static final Map<String, Column> CURRENCY_COLUMNS = new HashMap<>();
+    private final Table usersTable;
 
     private boolean synchronizationActive; // A little helper to pause synchronization during operations disable
 
-    public DataHandler(@NotNull CoinsEnginePlugin plugin) {
+    public DataHandler(@NonNull CoinsEnginePlugin plugin) {
         super(plugin);
         this.setSynchronizationActive(true);
-    }
 
-    public void setSynchronizationActive(boolean synchronizationActive) {
-        this.synchronizationActive = synchronizationActive;
-    }
-
-    @NotNull
-    public String getUsersTable() {
-        return this.tableUsers;
-    }
-
-    @Override
-    protected void onClose() {
-        super.onClose();
-        CURRENCY_COLUMNS.clear();
-    }
-
-    @Override
-    @NotNull
-    protected Function<ResultSet, CoinsUser> createUserFunction() {
-        return DataQueries.USER_LOADER;
-    }
-
-    @Override
-    @NotNull
-    protected GsonBuilder registerAdapters(@NotNull GsonBuilder builder) {
-        return builder;
+        this.usersTable = Table.builder(this.getTablePrefix() + "_users")
+            .withColumn(DataColumns.ID)
+            .withColumn(DataColumns.USER_UUID)
+            .withColumn(DataColumns.USER_NAME)
+            .withColumn(DataColumns.USER_LAST_SEEN)
+            .withColumn(DataColumns.USER_SETTINGS)
+            .withColumn(DataColumns.USER_HIDE_FROM_TOPS)
+            .build();
     }
 
     @Override
     protected void onInitialize() {
-        super.onInitialize();
+        this.createTable(this.usersTable);
 
-        this.dropColumn(this.tableUsers, "balances", "currencyData");
-        this.addColumn(this.tableUsers, COLUMN_SETTINGS, "{}");
-        this.addColumn(this.tableUsers, COLUMN_HIDE_FROM_TOPS, String.valueOf(0));
-    }
-
-    @NotNull
-    public static Column getCurrencyColumn(@NotNull Currency currency) {
-        return getCurrencyColumn(currency.getId());
-    }
-
-    @NotNull
-    public static Column getCurrencyColumn(@NotNull String currencyId) {
-        return CURRENCY_COLUMNS.get(currencyId);
-    }
-
-    public static boolean isCurrencyColumnCached(@NotNull Currency currency) {
-        return CURRENCY_COLUMNS.containsKey(currency.getId());
-    }
-
-    public void onCurrencyRegister(@NotNull Currency currency) {
-        this.addCurrencyColumn(currency);
-    }
-
-    public void onCurrencyUnload(@NotNull Currency currency) {
-        CURRENCY_COLUMNS.remove(currency.getId());
-    }
-
-    public void addCurrencyColumn(@NotNull Currency currency) {
-        Column column = Column.of(currency.getColumnName(), ColumnType.DOUBLE);
-        this.addColumn(this.tableUsers, column, String.valueOf(currency.getStartValue()));
-        CURRENCY_COLUMNS.put(currency.getId(), column);
+        this.dropColumn(this.usersTable, "dateCreated");
+        this.dropColumn(this.usersTable, "last_online");
     }
 
     @Override
-    protected void addUpsertQueryData(@NotNull ValuedQuery<?, CoinsUser> query) {
-        query.setValue(COLUMN_SETTINGS, user -> GSON.toJson(user.getSettingsMap()));
-        query.setValue(COLUMN_HIDE_FROM_TOPS, user -> String.valueOf(user.isHiddenFromTops() ? 1 : 0));
-
-        CURRENCY_COLUMNS.forEach((id, column) -> {
-            query.setValue(column, user -> String.valueOf(user.getBalance().get(id)));
-        });
+    protected void onClose() {
+        DataColumns.clearCache();
     }
 
     @Override
-    protected void addSelectQueryData(@NotNull SelectQuery<CoinsUser> query) {
-        query.column(COLUMN_SETTINGS);
-        query.column(COLUMN_HIDE_FROM_TOPS);
-        CURRENCY_COLUMNS.values().forEach(query::column);
-    }
+    public void onPurge() {
+        int period = this.config.getPurgePeriod();
+        long deadline = TimeUtil.toEpochMillis(TimeUtil.getCurrentDateTime().minusDays(period));
 
-    @Override
-    protected void addTableColumns(@NotNull List<Column> columns) {
-        columns.add(COLUMN_SETTINGS);
-        columns.add(COLUMN_HIDE_FROM_TOPS);
+        this.delete(this.usersTable, Wheres.where(DataColumns.USER_LAST_SEEN, Operator.SMALLER, o -> deadline));
     }
 
     @Override
@@ -136,17 +76,75 @@ public class DataHandler extends AbstractUserDataManager<CoinsEnginePlugin, Coin
         this.synchronizer.syncAll();
     }
 
-    public void resetBalances(@NotNull Currency currency) {
-        this.resetBalances(Lists.newSet(currency));
+    public void onCurrencyRegister(@NonNull ExcellentCurrency currency) {
+        this.addCurrencyColumn(currency);
     }
 
-    public void resetBalances(@NotNull Collection<Currency> currencies) {
-        UpdateQuery<Object> query = new UpdateQuery<>();
+    public void onCurrencyUnload(@NonNull ExcellentCurrency currency) {
+        DataColumns.uncacheCurrency(currency);
+    }
 
-        for (Currency currency : currencies) {
-            query.setValue(getCurrencyColumn(currency), o -> String.valueOf(currency.getStartValue()));
+    public void setSynchronizationActive(boolean synchronizationActive) {
+        this.synchronizationActive = synchronizationActive;
+    }
+
+    public void addCurrencyColumn(@NonNull ExcellentCurrency currency) {
+        this.addColumn(this.usersTable, DataColumns.forCurrency(currency));
+    }
+
+    @Override
+    @NonNull
+    public Table getUsersTable() {
+        return this.usersTable;
+    }
+
+    @Override
+    @NonNull
+    public Column<UUID> getUserIdColumn() {
+        return DataColumns.USER_UUID;
+    }
+
+    @Override
+    @NonNull
+    public Column<String> getUserNameColumn() {
+        return DataColumns.USER_NAME;
+    }
+
+    @Override
+    @NonNull
+    public SelectStatement<CoinsUser> getUserSelectStatement() {
+        return DataQueries.userSelect();
+    }
+
+    @Override
+    @NonNull
+    public InsertStatement<CoinsUser> getUserInsertStatement() {
+        return DataQueries.userInsert();
+    }
+
+    @Override
+    @NonNull
+    public UpdateStatement<CoinsUser> getUserUpdateStatement() {
+        return DataQueries.userUpdate();
+    }
+
+    @Override
+    @NonNull
+    public UpdateStatement<CoinsUser> getUserTinyUpdateStatement() {
+        return DataQueries.userTinyUpdate();
+    }
+
+    public void resetBalances(@NonNull ExcellentCurrency currency) {
+        this.resetBalances(Set.of(currency));
+    }
+
+    public void resetBalances(@NonNull Collection<ExcellentCurrency> currencies) {
+        UpdateStatement.Builder<Object> builder = UpdateStatement.builder();
+
+        for (ExcellentCurrency currency : currencies) {
+            builder.setDouble(DataColumns.forCurrency(currency), o -> currency.getStartValue());
         }
 
-        this.update(this.tableUsers, query, new Object()); // Little hack to bypass query params.
+        this.update(this.usersTable, builder.build(), currencies);
     }
 }

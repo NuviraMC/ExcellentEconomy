@@ -2,53 +2,38 @@ package su.nightexpress.coinsengine.currency;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import org.jspecify.annotations.NonNull;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 import su.nightexpress.nightcore.util.LowerCase;
 
 import java.util.*;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 public class CurrencyRegistry {
 
-    //private final CoinsEnginePlugin plugin;
-    private final Map<String, Currency> currencyMap;
+    private final Map<String, ExcellentCurrency> currencyByIdMap;
 
     public CurrencyRegistry() {
-        //this.plugin = plugin;
-        this.currencyMap = new HashMap<>();
+        this.currencyByIdMap = new HashMap<>();
     }
 
-    public void removeAll() {
-        this.getCurrencies().forEach(this::remove);
+    public void clear() {
+        this.currencyByIdMap.clear();
     }
 
-    /*public void unregisterNormal() {
-        this.getCurrencies().stream().filter(Predicate.not(Currency::isPrimary)).forEach(this::remove);
-    }*/
-
-    public void add(@NotNull Currency currency) {
-        this.currencyMap.put(currency.getId(), currency);
-
-        currency.onRegister();
+    public void add(@NotNull ExcellentCurrency currency) {
+        this.currencyByIdMap.put(currency.getId(), currency);
     }
 
     @Nullable
-    public Currency remove(@NotNull Currency currency) {
+    public ExcellentCurrency remove(@NotNull ExcellentCurrency currency) {
         return this.remove(currency.getId());
     }
 
     @Nullable
-    public Currency remove(@NotNull String id) {
-        Currency currency = this.currencyMap.remove(LowerCase.INTERNAL.apply(id));
-        if (currency != null) {
-            currency.onUnregister();
-        }
-
-        return currency;
-    }
-
-    @NotNull
-    public Map<String, Currency> getCurrencyMap() {
-        return this.currencyMap;
+    public ExcellentCurrency remove(@NotNull String id) {
+        return this.currencyByIdMap.remove(LowerCase.INTERNAL.apply(id));
     }
 
     public boolean hasPrimary() {
@@ -56,31 +41,51 @@ public class CurrencyRegistry {
     }
 
     public boolean isRegistered(@NotNull String id) {
-        return this.currencyMap.containsKey(LowerCase.INTERNAL.apply(id));
+        return this.currencyByIdMap.containsKey(LowerCase.INTERNAL.apply(id));
+    }
+
+    public void forEach(@NonNull Consumer<ExcellentCurrency> consumer) {
+        this.stream().forEach(consumer);
+    }
+
+    @NonNull
+    public Stream<ExcellentCurrency> stream() {
+        return this.currencyByIdMap.values().stream();
     }
 
     @NotNull
-    public Optional<Currency> findPrimary() {
-        return this.currencyMap.values().stream().filter(Currency::isPrimary).findFirst();
-    }
-
-    @Nullable
-    public Currency getById(@NotNull String id) {
-        return this.currencyMap.get(LowerCase.INTERNAL.apply(id));
+    public Optional<ExcellentCurrency> findPrimary() {
+        return this.stream().filter(ExcellentCurrency::isPrimary).findFirst();
     }
 
     @NotNull
-    public Optional<Currency> byId(@NotNull String id) {
-        return Optional.ofNullable(this.getById(id));
+    @Deprecated
+    public Map<String, ExcellentCurrency> getCurrencyMap() {
+        return this.getCurrencyByIdMap();
+    }
+
+    @NonNull
+    public Map<String, ExcellentCurrency> getCurrencyByIdMap() {
+        return Map.copyOf(this.currencyByIdMap);
     }
 
     @NotNull
     public List<String> getCurrencyIds() {
-        return new ArrayList<>(this.currencyMap.keySet());
+        return new ArrayList<>(this.currencyByIdMap.keySet());
     }
 
     @NotNull
-    public Collection<Currency> getCurrencies() {
-        return new HashSet<>(this.currencyMap.values());
+    public Set<ExcellentCurrency> getCurrencies() {
+        return Set.copyOf(this.currencyByIdMap.values());
+    }
+
+    @Nullable
+    public ExcellentCurrency getById(@NotNull String id) {
+        return this.currencyByIdMap.get(LowerCase.INTERNAL.apply(id));
+    }
+
+    @NotNull
+    public Optional<ExcellentCurrency> byId(@NotNull String id) {
+        return Optional.ofNullable(this.getById(id));
     }
 }

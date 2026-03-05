@@ -1,13 +1,14 @@
 package su.nightexpress.coinsengine.config;
 
-import su.nightexpress.coinsengine.command.CommandNames;
+import su.nightexpress.coinsengine.tops.TopDefaults;
 import su.nightexpress.nightcore.locale.LangContainer;
 import su.nightexpress.nightcore.locale.LangEntry;
 import su.nightexpress.nightcore.locale.entry.MessageLocale;
 import su.nightexpress.nightcore.locale.entry.TextLocale;
 import su.nightexpress.nightcore.locale.message.MessageData;
+import su.nightexpress.nightcore.util.placeholder.CommonPlaceholders;
 
-import static su.nightexpress.coinsengine.Placeholders.*;
+import static su.nightexpress.coinsengine.EconomyPlaceholders.*;
 import static su.nightexpress.nightcore.util.text.night.wrapper.TagWrappers.*;
 
 public class Lang implements LangContainer {
@@ -36,7 +37,7 @@ public class Lang implements LangContainer {
     public static final TextLocale COMMAND_CURRENCY_TOP_DESC      = LangEntry.builder("Command.Currency.Top.Desc").text("List of players with the most balance.");
 
     public static final MessageLocale COMMAND_SYNTAX_INVALID_CURRENCY = LangEntry.builder("Command.Syntax.InvalidCurrency").chatMessage(
-        GRAY.wrap(SOFT_RED.wrap(GENERIC_INPUT) + " is not a valid currency!"));
+        GRAY.wrap(SOFT_RED.wrap(CommonPlaceholders.GENERIC_INPUT) + " is not a valid currency!"));
 
 
 
@@ -45,7 +46,7 @@ public class Lang implements LangContainer {
     );
 
     public static final MessageLocale CURRENCY_OPERATION_RESET_FEEDBACK = LangEntry.builder("Currency.Operation.Reset.Feedback").chatMessage(
-        GRAY.wrap(SOFT_YELLOW.wrap(PLAYER_NAME) + "'s balance has been reset to " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
+        GRAY.wrap(SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "'s balance has been reset to " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
     public static final MessageLocale CURRENCY_OPERATION_RESET_NOTIFY = LangEntry.builder("Currency.Operation.Reset.Notify").chatMessage(
         GRAY.wrap("Your balance has been reset to " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
@@ -147,7 +148,7 @@ public class Lang implements LangContainer {
 
 
     public static final MessageLocale COMMAND_CURRENCY_GIVE_DONE = LangEntry.builder("Command.Currency.Give.Done").chatMessage(
-        GRAY.wrap("Added " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " to " + SOFT_YELLOW.wrap(PLAYER_NAME) + "'s balance. New balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
+        GRAY.wrap("Added " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " to " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "'s balance. New balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
     public static final MessageLocale COMMAND_CURRENCY_GIVE_NOTIFY = LangEntry.builder("Command.Currency.Give.Notify").chatMessage(
         GRAY.wrap(SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " has been added to your account!"));
@@ -159,14 +160,14 @@ public class Lang implements LangContainer {
 
 
     public static final MessageLocale COMMAND_CURRENCY_TAKE_DONE = LangEntry.builder("Command.Currency.Take.Done").chatMessage(
-        GRAY.wrap("Taken " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " from " + SOFT_YELLOW.wrap(PLAYER_NAME) + "'s balance. New balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
+        GRAY.wrap("Taken " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " from " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "'s balance. New balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
     public static final MessageLocale COMMAND_CURRENCY_TAKE_NOTIFY = LangEntry.builder("Command.Currency.Take.Notify").chatMessage(
         GRAY.wrap(SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " has been taken from your account!"));
 
 
     public static final MessageLocale COMMAND_CURRENCY_SET_DONE = LangEntry.builder("Command.Currency.Set.Done").chatMessage(
-        GRAY.wrap("Set " + SOFT_YELLOW.wrap(PLAYER_NAME) + "'s " + SOFT_YELLOW.wrap(CURRENCY_NAME) + " balance to " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
+        GRAY.wrap("Set " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "'s " + SOFT_YELLOW.wrap(CURRENCY_NAME) + " balance to " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
     public static final MessageLocale COMMAND_CURRENCY_SET_NOTIFY = LangEntry.builder("Command.Currency.Set.Notify").chatMessage(
         GRAY.wrap("Your " + SOFT_YELLOW.wrap(CURRENCY_NAME) + " balance has been set to " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + "."));
@@ -179,20 +180,20 @@ public class Lang implements LangContainer {
         GRAY.wrap("You can not send smaller than " + SOFT_RED.wrap(GENERIC_AMOUNT) + "!"));
 
     public static final MessageLocale CURRENCY_SEND_ERROR_NO_PAYMENTS = LangEntry.builder("Command.Currency.Send.Error.NoPayments").chatMessage(
-        GRAY.wrap(SOFT_RED.wrap(PLAYER_NAME) + " does not accept " + SOFT_RED.wrap(CURRENCY_NAME) + "!"));
+        GRAY.wrap(SOFT_RED.wrap(CommonPlaceholders.PLAYER_NAME) + " does not accept " + SOFT_RED.wrap(CURRENCY_NAME) + "!"));
 
     public static final MessageLocale CURRENCY_SEND_DONE_SENDER = LangEntry.builder("Command.Currency.Send.Done.Sender").chatMessage(
-        GRAY.wrap("You sent " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " to " + SOFT_YELLOW.wrap(PLAYER_NAME) + "!"));
+        GRAY.wrap("You sent " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " to " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "!"));
 
-    public static final MessageLocale CURRENCY_SEND_DONE_NOTIFY = LangEntry.builder("Command.Currency.Send.Done.Notify").chatMessage(
-        GRAY.wrap("You received " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " from " + SOFT_YELLOW.wrap(PLAYER_NAME) + "!"));
+    public static final MessageLocale CURRENCY_SEND_NOTIFY = LangEntry.builder("Command.Currency.Send.Done.Notify").chatMessage(
+        GRAY.wrap("You received " + SOFT_YELLOW.wrap(GENERIC_AMOUNT) + " from " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "."));
 
 
     public static final MessageLocale COMMAND_CURRENCY_PAYMENTS_TOGGLE = LangEntry.builder("Command.Currency.Payments.Toggle").chatMessage(
         GRAY.wrap(SOFT_YELLOW.wrap(CURRENCY_NAME) + " payments acception: " + SOFT_YELLOW.wrap(GENERIC_STATE) + "."));
 
     public static final MessageLocale COMMAND_CURRENCY_PAYMENTS_TARGET = LangEntry.builder("Command.Currency.Payments.Target").chatMessage(
-        GRAY.wrap(SOFT_YELLOW.wrap(CURRENCY_NAME) + " payments acception for " + SOFT_YELLOW.wrap(PLAYER_NAME) + ": " + SOFT_YELLOW.wrap(GENERIC_STATE) + "."));
+        GRAY.wrap(SOFT_YELLOW.wrap(CURRENCY_NAME) + " payments acception for " + SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + ": " + SOFT_YELLOW.wrap(GENERIC_STATE) + "."));
 
 
     public static final MessageLocale TOP_LIST = LangEntry.builder("Command.Currency.Top.List").message(
@@ -207,12 +208,12 @@ public class Lang implements LangContainer {
     );
 
     public static final TextLocale TOP_ENTRY = LangEntry.builder("Command.Currency.Top.Entry").text(
-        YELLOW.wrap("#" + GENERIC_POS) + " " + WHITE.wrap(PLAYER_NAME) + DARK_GRAY.wrap(" ▪ ") + GREEN.wrap(GENERIC_BALANCE)
+        YELLOW.wrap("#" + GENERIC_POS) + " " + WHITE.wrap(CommonPlaceholders.PLAYER_NAME) + DARK_GRAY.wrap(" ▪ ") + GREEN.wrap(GENERIC_BALANCE)
     );
 
     public static final TextLocale TOP_LIST_NEXT_PAGE_ACTIVE = LangEntry.builder("TopList.NextPage.Active").text(
         SHOW_TEXT.with(GRAY.wrap("Click to get to the next page.")).wrap(
-            RUN_COMMAND.with("/" + CURRENCY_LABEL + " " + CommandNames.CURRENCY_TOP + " " + GENERIC_VALUE).wrap(
+            RUN_COMMAND.with("/" + CURRENCY_LABEL + " " + TopDefaults.COMMAND_TOP + " " + CommonPlaceholders.GENERIC_VALUE).wrap(
                 GREEN.wrap("[→]")
             )
         )
@@ -224,7 +225,7 @@ public class Lang implements LangContainer {
 
     public static final TextLocale TOP_LIST_PREVIOUS_PAGE_ACTIVE = LangEntry.builder("TopList.PreviousPage.Active").text(
         SHOW_TEXT.with(GRAY.wrap("Click to get to the previous page.")).wrap(
-            RUN_COMMAND.with("/" + CURRENCY_LABEL + " " + CommandNames.CURRENCY_TOP + " " + GENERIC_VALUE).wrap(
+            RUN_COMMAND.with("/" + CURRENCY_LABEL + " " + TopDefaults.COMMAND_TOP + " " + CommonPlaceholders.GENERIC_VALUE).wrap(
                 GREEN.wrap("[←]")
             )
         )
@@ -239,7 +240,7 @@ public class Lang implements LangContainer {
         GRAY.wrap("Balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
     public static final MessageLocale CURRENCY_BALANCE_DISPLAY_OTHERS = LangEntry.builder("Currency.Balance.Display.Others").chatMessage(
-        GRAY.wrap(SOFT_YELLOW.wrap(PLAYER_NAME) + "'s balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
+        GRAY.wrap(SOFT_YELLOW.wrap(CommonPlaceholders.PLAYER_NAME) + "'s balance: " + SOFT_YELLOW.wrap(GENERIC_BALANCE) + "."));
 
 
     public static final MessageLocale CURRENCY_WALLET_OWN = LangEntry.builder("Currency.Wallet.Own").message(
@@ -254,7 +255,7 @@ public class Lang implements LangContainer {
     public static final MessageLocale CURRENCY_WALLET_OTHERS = LangEntry.builder("Currency.Wallet.Others").message(
         MessageData.CHAT_NO_PREFIX,
         DARK_GRAY.wrap(STRIKETHROUGH.wrap("-".repeat(32))),
-        GRAY.wrap("[" + GREEN.wrap("$") + "] " + WHITE.wrap(PLAYER_NAME) + "'s Wallet:"),
+        GRAY.wrap("[" + GREEN.wrap("$") + "] " + WHITE.wrap(CommonPlaceholders.PLAYER_NAME) + "'s Wallet:"),
         " ",
         GENERIC_ENTRY,
         DARK_GRAY.wrap(STRIKETHROUGH.wrap("-".repeat(32)))

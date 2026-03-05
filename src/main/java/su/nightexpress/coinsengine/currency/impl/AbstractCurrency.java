@@ -1,38 +1,40 @@
 package su.nightexpress.coinsengine.currency.impl;
 
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import su.nightexpress.coinsengine.Placeholders;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import org.jspecify.annotations.NonNull;
+import su.nightexpress.coinsengine.EconomyPlaceholders;
 import su.nightexpress.coinsengine.config.Config;
 import su.nightexpress.coinsengine.config.Perms;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 import su.nightexpress.nightcore.config.ConfigValue;
 import su.nightexpress.nightcore.config.FileConfig;
+import su.nightexpress.nightcore.integration.placeholder.PAPI;
 import su.nightexpress.nightcore.locale.entry.MessageLocale;
 import su.nightexpress.nightcore.locale.message.LangMessage;
 import su.nightexpress.nightcore.manager.ConfigBacked;
-import su.nightexpress.nightcore.util.LowerCase;
-import su.nightexpress.nightcore.util.NumberUtil;
-import su.nightexpress.nightcore.util.Plugins;
-import su.nightexpress.nightcore.util.StringUtil;
+import su.nightexpress.nightcore.util.*;
 import su.nightexpress.nightcore.util.bukkit.NightItem;
 import su.nightexpress.nightcore.util.number.CompactNumber;
-import su.nightexpress.nightcore.util.placeholder.Replacer;
+import su.nightexpress.nightcore.util.placeholder.PlaceholderContext;
+import su.nightexpress.nightcore.util.placeholder.PlaceholderResolver;
 
 import java.nio.file.Path;
+import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
-public abstract class AbstractCurrency implements Currency, ConfigBacked {
+public abstract class AbstractCurrency implements ExcellentCurrency, ConfigBacked {
+
+    private static final DecimalFormat RAW_FORMAT = new DecimalFormat("#");
+
+    static {
+        RAW_FORMAT.setMaximumFractionDigits(8);
+    }
 
     protected final Path   path;
     protected final String id;
@@ -62,7 +64,7 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
 
     protected String messagePrefix;
 
-    public AbstractCurrency(@NotNull Path path, @NotNull String id) {
+    public AbstractCurrency(@NonNull Path path, @NonNull String id) {
         this.path = path;
         this.id = id;
         this.exchangeRates = new HashMap<>();
@@ -71,8 +73,8 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.setSymbol("");
         this.setPrefix(this.name);
         this.setCommandAliases(new String[]{id});
-        this.setFormat(Placeholders.GENERIC_AMOUNT + Placeholders.CURRENCY_SYMBOL);
-        this.setFormatShort(Placeholders.GENERIC_AMOUNT + Placeholders.CURRENCY_SYMBOL);
+        this.setFormat(EconomyPlaceholders.GENERIC_AMOUNT + EconomyPlaceholders.CURRENCY_SYMBOL);
+        this.setFormatShort(EconomyPlaceholders.GENERIC_AMOUNT + EconomyPlaceholders.CURRENCY_SYMBOL);
         this.setIcon(NightItem.fromType(Material.EMERALD));
         this.dataColumn = id;
         this.dataSync = false;
@@ -96,7 +98,7 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.loadConfig().edit(this::write);
     }
 
-    private void load(@NotNull FileConfig config) throws IllegalStateException {
+    private void load(@NonNull FileConfig config) throws IllegalStateException {
         this.setName(ConfigValue.create("Name", StringUtil.capitalizeUnderscored(this.id),
             "Currency display name.",
             Placeholders.URL_WIKI_TEXT
@@ -110,13 +112,13 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.setPrefix(ConfigValue.create("Prefix", this.name,
             "Currency prefix.",
             Placeholders.URL_WIKI_TEXT,
-            Placeholders.WIKI_PREFIXES
+            EconomyPlaceholders.WIKI_PREFIXES
         ).read(config));
 
         this.setCommandAliases(ConfigValue.create("Command_Aliases", new String[]{this.id},
             "Currency command aliases. Split with comma.",
             "[*] Server reboot is required for the changes to apply.",
-            Placeholders.WIKI_COMMANDS
+            EconomyPlaceholders.WIKI_COMMANDS
         ).read(config));
 
         this.setIcon(ConfigValue.create("Icon",
@@ -126,32 +128,32 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         ).read(config));
 
         this.setFormat(ConfigValue.create("Format",
-            Placeholders.GENERIC_AMOUNT + Placeholders.CURRENCY_SYMBOL,
+            EconomyPlaceholders.GENERIC_AMOUNT + EconomyPlaceholders.CURRENCY_SYMBOL,
             "Currency display format.",
             "Placeholders:",
-            "- " + Placeholders.GENERIC_AMOUNT + " - Amount value.",
-            "- Currency placeholders: " + Placeholders.WIKI_PLACEHOLDERS,
+            "- " + EconomyPlaceholders.GENERIC_AMOUNT + " - Amount value.",
+            "- Currency placeholders: " + EconomyPlaceholders.WIKI_PLACEHOLDERS,
             "- " + Plugins.PLACEHOLDER_API + " placeholders that are NOT bound to a player (e.g. Oraxen or ItemsAdder %img% placeholders)",
             Placeholders.URL_WIKI_TEXT
         ).read(config));
 
         this.setFormatShort(ConfigValue.create("Format_Short",
-            Placeholders.CURRENCY_SYMBOL + Placeholders.GENERIC_AMOUNT,
+            EconomyPlaceholders.CURRENCY_SYMBOL + EconomyPlaceholders.GENERIC_AMOUNT,
             "Currency short display format.",
-            "- " + Placeholders.GENERIC_AMOUNT + " - Amount value.",
-            "- Currency placeholders: " + Placeholders.WIKI_PLACEHOLDERS,
+            "- " + EconomyPlaceholders.GENERIC_AMOUNT + " - Amount value.",
+            "- Currency placeholders: " + EconomyPlaceholders.WIKI_PLACEHOLDERS,
             "- " + Plugins.PLACEHOLDER_API + " placeholders that are NOT bound to a player (e.g. Oraxen or ItemsAdder %img% placeholders)",
             Placeholders.URL_WIKI_TEXT
         ).read(config));
 
         this.setColumnName(ConfigValue.create("Column_Name", this.id,
             "Database column name where this currency will be saved.",
-            Placeholders.WIKI_CROSS_SERVER
+            EconomyPlaceholders.WIKI_CROSS_SERVER
         ).read(config));
 
         this.setSynchronizable(ConfigValue.create("Synchronized", true,
             "Controls whether currency is included in data synchronization.",
-            Placeholders.WIKI_CROSS_SERVER
+            EconomyPlaceholders.WIKI_CROSS_SERVER
         ).read(config));
 
         this.setDecimal(ConfigValue.create("Decimal", false,
@@ -161,7 +163,7 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.setPermissionRequired(ConfigValue.create("Permission_Required",
             false,
             "Controls whether permission is required for this currency.",
-            Placeholders.WIKI_PERMISSIONS
+            EconomyPlaceholders.WIKI_PERMISSIONS
         ).read(config));
 
         this.setTransferAllowed(ConfigValue.create("Transfer_Allowed",
@@ -189,7 +191,7 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.setExchangeAllowed(ConfigValue.create("Exchange.Allowed",
             true,
             "Controls whether this currency can be exchanged for other ones.",
-            Placeholders.WIKI_EXCHANGE
+            EconomyPlaceholders.WIKI_EXCHANGE
         ).read(config));
 
         if (config.getSection("Exchange.Rates").isEmpty()) {
@@ -206,13 +208,13 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
             true,
             "Controls whether this currency can have a leaderboard.",
             "[*] Requires the Tops module to be enabled.",
-            Placeholders.WIKI_TOPS
+            EconomyPlaceholders.WIKI_TOPS
         ).read(config);
 
         this.updateMessagePrefix();
     }
 
-    private void write(@NotNull FileConfig config) {
+    private void write(@NonNull FileConfig config) {
         config.set("Name", this.name);
         config.set("Symbol", this.symbol);
         config.set("Prefix", this.prefix);
@@ -241,39 +243,37 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         config.set("Leaderboard.Enabled", this.leaderboardEnabled);
     }
 
-    @NotNull
     @Override
-    public UnaryOperator<String> replacePlaceholders() {
-        return Placeholders.forCurrency(this);
+    @NonNull
+    public PlaceholderResolver placeholders() {
+        return EconomyPlaceholders.CURRENCY.resolver(this);
     }
 
     @Override
-    public void sendPrefixed(@NotNull MessageLocale locale, @NotNull CommandSender sender) {
-        this.sendPrefixed(locale, sender, null);
+    public void sendPrefixed(@NonNull MessageLocale locale, @NonNull CommandSender sender) {
+        this.getPrefixed(locale).sendWith(sender, builder -> builder.with(this.placeholders()));
     }
 
     @Override
-    public void sendPrefixed(@NotNull MessageLocale locale, @NotNull CommandSender sender, @Nullable Consumer<Replacer> consumer) {
-        LangMessage message;
-        if (Config.CURRENCY_PREFIX_ENABLED.get()) {
-            message = locale.withPrefix(this.messagePrefix);
-        }
-        else {
-            message = locale.message();
-        }
+    public void sendPrefixed(@NonNull MessageLocale locale, @NonNull CommandSender sender, @NonNull Consumer<PlaceholderContext.Builder> consumer) {
+        this.getPrefixed(locale).sendWith(sender, builder -> consumer.accept(builder.with(this.placeholders())));
+    }
 
-        message.send(sender, replacer -> {
-            replacer.replace(this.replacePlaceholders());
-            if (consumer != null) consumer.accept(replacer);
-        });
+    @Override
+    public void sendPrefixed(@NonNull MessageLocale locale, @NonNull CommandSender sender, @NonNull PlaceholderContext context) {
+        this.getPrefixed(locale).sendWith(sender, context);
+    }
+
+    private LangMessage getPrefixed(@NonNull MessageLocale locale) {
+        return Config.CURRENCY_PREFIX_ENABLED.get() ? locale.withPrefix(this.messagePrefix) : locale.message();
     }
 
     public void updateMessagePrefix() {
-        this.messagePrefix = this.replacePlaceholders().apply(Config.CURRENCY_PREFIX_FORMAT.get());
+        this.messagePrefix = PlaceholderContext.builder().with(this.placeholders()).build().apply(Config.CURRENCY_PREFIX_FORMAT.get());
     }
 
     @Override
-    public boolean hasPermission(@NotNull Player player) {
+    public boolean hasPermission(@NonNull Player player) {
         return !this.permissionRequired || (player.hasPermission(this.getPermission()) || player.hasPermission(Perms.CURRENCY));
     }
 
@@ -313,122 +313,129 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
     }
 
     @Override
-    @NotNull
+    @NonNull
     public String getPermission() {
         return Perms.PREFIX_CURRENCY + this.getId();
     }
 
     @Override
-    @NotNull
+    @NonNull
     public CompactNumber compacted(double balance) {
         return NumberUtil.asCompact(this.floorIfNeeded(balance));
     }
 
     @Override
-    @NotNull
+    @NonNull
     public String formatValue(double balance) {
         return NumberUtil.format(this.floorIfNeeded(balance));
     }
 
     @Override
-    @NotNull
+    @NonNull
     public String format(double balance) {
         return this.getFormatted(this.format, balance, this::formatValue);
     }
 
     @Override
-    @NotNull
+    @NonNull
     public String formatCompact(double balance) {
         return this.getFormatted(this.formatShort, balance, value -> this.compacted(value).format());
     }
 
-    @NotNull
-    private String getFormatted(@NotNull String originalFormat, double balance, @NotNull Function<Double, String> valueFormatter) {
-        if (Config.useCurrencyFormatPAPI()) {
-            originalFormat = PlaceholderAPI.setPlaceholders(null, originalFormat);
-        }
+    @Override
+    @NonNull
+    public String formatRaw(double balance) {
+        return RAW_FORMAT.format(this.floorIfNeeded(balance));
+    }
 
-        return this.replacePlaceholders().apply(originalFormat).replace(Placeholders.GENERIC_AMOUNT, valueFormatter.apply(balance));
+    @NonNull
+    private String getFormatted(@NonNull String originalFormat, double balance, @NonNull Function<Double, String> valueFormatter) {
+        return PlaceholderContext.builder()
+            .with(this.placeholders())
+            .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> valueFormatter.apply(balance))
+            .andThen(string -> PAPI.setPlaceholders(null, string))
+            .build()
+            .apply(originalFormat);
     }
 
     @Override
-    @NotNull
+    @NonNull
     public Path getPath() {
         return this.path;
     }
 
     @Override
-    @NotNull
+    @NonNull
     public String getId() {
         return this.id;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getName() {
         return this.name;
     }
 
     @Override
-    public void setName(@NotNull String name) {
+    public void setName(@NonNull String name) {
         this.name = name;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getPrefix() {
         return this.prefix;
     }
 
     @Override
-    public void setPrefix(@NotNull String prefix) {
+    public void setPrefix(@NonNull String prefix) {
         this.prefix = prefix;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getSymbol() {
         return this.symbol;
     }
 
     @Override
-    public void setSymbol(@NotNull String symbol) {
+    public void setSymbol(@NonNull String symbol) {
         this.symbol = symbol;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getFormat() {
         return this.format;
     }
 
     @Override
-    public void setFormat(@NotNull String format) {
+    public void setFormat(@NonNull String format) {
         this.format = format;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getFormatShort() {
         return this.formatShort;
     }
 
     @Override
-    public void setFormatShort(@NotNull String formatShort) {
+    public void setFormatShort(@NonNull String formatShort) {
         this.formatShort = formatShort.replace("%currency_short_symbol%", "");
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String getColumnName() {
         return this.dataColumn;
     }
 
-    public void setColumnName(@NotNull String dataColumn) {
+    public void setColumnName(@NonNull String dataColumn) {
         this.dataColumn = dataColumn;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public String[] getCommandAliases() {
         return this.commandAliases;
@@ -439,26 +446,14 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
         this.commandAliases = commandAliases;
     }
 
-    @NotNull
-    @Deprecated
-    public ItemStack getIcon() {
-        return this.icon.getItemStack();
-    }
-
     @Override
-    @Deprecated
-    public void setIcon(@NotNull ItemStack icon) {
-        this.setIcon(NightItem.fromItemStack(icon));
-    }
-
-    @Override
-    @NotNull
+    @NonNull
     public NightItem icon() {
         return this.icon.copy();
     }
 
     @Override
-    public void setIcon(@NotNull NightItem icon) {
+    public void setIcon(@NonNull NightItem icon) {
         this.icon = icon;
     }
 
@@ -532,12 +527,6 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
     }
 
     @Override
-    @Deprecated
-    public boolean isVaultEconomy() {
-        return this.isPrimary();
-    }
-
-    @Override
     public boolean isExchangeAllowed() {
         return this.exchangeAllowed;
     }
@@ -548,29 +537,29 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
     }
 
     @Override
-    @NotNull
+    @NonNull
     public Map<String, Double> getExchangeRates() {
         return this.exchangeRates;
     }
 
     @Override
-    public double getExchangeRate(@NotNull Currency currency) {
+    public double getExchangeRate(@NonNull ExcellentCurrency currency) {
         return this.getExchangeRate(currency.getId());
     }
 
     @Override
-    public double getExchangeRate(@NotNull String id) {
+    public double getExchangeRate(@NonNull String id) {
         return this.exchangeRates.getOrDefault(LowerCase.INTERNAL.apply(id), 0D);
     }
 
     @Override
-    public double getExchangeResult(@NotNull Currency other, double amount) {
+    public double getExchangeResult(@NonNull ExcellentCurrency other, double amount) {
         double rate = this.getExchangeRate(other);
         return other.floorIfNeeded(amount * rate);
     }
 
     @Override
-    public boolean canExchangeTo(@NotNull Currency other) {
+    public boolean canExchangeTo(@NonNull ExcellentCurrency other) {
         return this.exchangeRates.containsKey(other.getId());
     }
 

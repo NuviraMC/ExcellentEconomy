@@ -8,15 +8,15 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.ServicesManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import su.nightexpress.coinsengine.CoinsEnginePlugin;
+import su.nightexpress.excellenteconomy.api.ExcellentEconomyAPI;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.currency.CurrencyManager;
-import su.nightexpress.coinsengine.currency.operation.NotificationTarget;
-import su.nightexpress.coinsengine.currency.operation.OperationContext;
-import su.nightexpress.coinsengine.currency.operation.OperationResult;
+import su.nightexpress.excellenteconomy.api.currency.operation.NotificationTarget;
+import su.nightexpress.excellenteconomy.api.currency.operation.OperationContext;
+import su.nightexpress.excellenteconomy.api.currency.operation.OperationResult;
 import su.nightexpress.coinsengine.data.DataHandler;
 import su.nightexpress.coinsengine.user.UserManager;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
+import su.nightexpress.coinsengine.user.CoinsUser;
 
 import java.nio.file.Path;
 import java.util.Collections;
@@ -26,20 +26,22 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     private static final EconomyResponse NO_BANKS = new EconomyResponse(0D, 0D, EconomyResponse.ResponseType.NOT_IMPLEMENTED, "CoinsEngine does not support bank accounts!");
 
-    private final CoinsEnginePlugin plugin;
+    private final ExcellentEconomyAPI api;
+
+    // TODO Uncomment when plugin reload logic is revamped.
     /*private final CurrencyManager   currencyManager;
     private final DataHandler       dataHandler;
     private final UserManager       userManager;*/
 
     public EconomyCurrency(@NotNull Path path,
                            @NotNull String id,
-                           @NotNull CoinsEnginePlugin plugin,
+                           @NotNull ExcellentEconomyAPI api,
                            @NotNull CurrencyManager currencyManager,
                            @NotNull DataHandler dataHandler,
                            @NotNull UserManager userManager) {
         super(path, id);
 
-        this.plugin = plugin;
+        this.api = api;
         /*this.currencyManager = currencyManager;
         this.dataHandler = dataHandler;
         this.userManager = userManager;*/
@@ -48,7 +50,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
     @Override
     public void onRegister() {
         ServicesManager services = Bukkit.getServer().getServicesManager();
-        services.register(Economy.class, this, this.plugin, ServicePriority.High);
+        services.register(Economy.class, this, this.api.plugin(), ServicePriority.High);
     }
 
     @Override
@@ -113,7 +115,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public double getBalance(OfflinePlayer player) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
+        CoinsUser user = this.api.userManager().getOrFetch(player.getUniqueId()).orElse(null);
         return this.getBalance(user);
     }
 
@@ -124,7 +126,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public double getBalance(String playerName) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(playerName);
+        CoinsUser user = this.api.userManager().getOrFetch(playerName).orElse(null);
         return this.getBalance(user);
     }
 
@@ -141,7 +143,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public boolean hasAccount(OfflinePlayer player) {
-        return this.plugin.getDataHandler().isUserExists(player.getUniqueId());
+        return this.api.userManager().getDataAccessor().isExists(player.getUniqueId());
     }
 
     @Override
@@ -151,7 +153,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public boolean hasAccount(String playerName) {
-        return this.plugin.getDataHandler().isUserExists(playerName);
+        return this.api.userManager().getDataAccessor().isExists(playerName);
     }
 
 
@@ -163,7 +165,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public boolean has(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
+        CoinsUser user = this.api.userManager().getOrFetch(player.getUniqueId()).orElse(null);
         return this.has(user, amount);
     }
 
@@ -174,7 +176,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public boolean has(String playerName, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(playerName);
+        CoinsUser user = this.api.userManager().getOrFetch(playerName).orElse(null);
         return this.has(user, amount);
     }
 
@@ -191,7 +193,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public EconomyResponse depositPlayer(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
+        CoinsUser user = this.api.userManager().getOrFetch(player.getUniqueId()).orElse(null);
         return this.depositUser(user, amount);
     }
 
@@ -202,7 +204,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public EconomyResponse depositPlayer(String playerName, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(playerName);
+        CoinsUser user = this.api.userManager().getOrFetch(playerName).orElse(null);
         return this.depositUser(user, amount);
     }
 
@@ -212,7 +214,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
             return new EconomyResponse(amount, 0, EconomyResponse.ResponseType.FAILURE, Lang.ECONOMY_ERROR_INVALID_PLAYER.text());
         }
 
-        OperationResult result = this.plugin.getCurrencyManager().give(this.operationContext(), user, this, amount);
+        OperationResult result = this.api.currencyManager().give(this.operationContext(), user, this, amount);
         EconomyResponse.ResponseType type = result == OperationResult.SUCCESS ? EconomyResponse.ResponseType.SUCCESS : EconomyResponse.ResponseType.FAILURE;
 
         return new EconomyResponse(amount, user.getBalance(this), type, null);
@@ -227,7 +229,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public EconomyResponse withdrawPlayer(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
+        CoinsUser user = this.api.userManager().getOrFetch(player.getUniqueId()).orElse(null);
         return this.withdrawUser(user, amount);
     }
 
@@ -238,7 +240,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
 
     @Override
     public EconomyResponse withdrawPlayer(String playerName, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(playerName);
+        CoinsUser user = this.api.userManager().getOrFetch(playerName).orElse(null);
         return this.withdrawUser(user, amount);
     }
 
@@ -252,7 +254,7 @@ public class EconomyCurrency extends AbstractCurrency implements Economy {
             return new EconomyResponse(amount, user.getBalance(this), EconomyResponse.ResponseType.FAILURE, Lang.ECONOMY_ERROR_INSUFFICIENT_FUNDS.text());
         }
 
-        OperationResult result = this.plugin.getCurrencyManager().remove(this.operationContext(), user, this, amount);
+        OperationResult result = this.api.currencyManager().remove(this.operationContext(), user, this, amount);
         EconomyResponse.ResponseType type = result == OperationResult.SUCCESS ? EconomyResponse.ResponseType.SUCCESS : EconomyResponse.ResponseType.FAILURE;
 
         return new EconomyResponse(amount, user.getBalance(this), type, null);

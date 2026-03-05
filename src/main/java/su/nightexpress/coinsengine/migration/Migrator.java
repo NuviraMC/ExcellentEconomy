@@ -5,7 +5,7 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 
 import java.util.Map;
 
@@ -29,8 +29,8 @@ public abstract class Migrator {
         return this.plugin.getPluginManager().getPlugin(this.name);
     }
 
-    public abstract boolean canMigrate(@NotNull Currency currency);
+    public abstract boolean canMigrate(@NotNull ExcellentCurrency currency);
 
     @NotNull
-    public abstract Map<OfflinePlayer, Double> getBalances(@NotNull Currency currency);
+    public abstract Map<OfflinePlayer, Double> getBalances(@NotNull ExcellentCurrency currency);
 }

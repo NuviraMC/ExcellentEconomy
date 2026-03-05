@@ -1,7 +1,7 @@
 package su.nightexpress.coinsengine.config;
 
 import org.bukkit.permissions.PermissionDefault;
-import su.nightexpress.coinsengine.Placeholders;
+import su.nightexpress.nightcore.util.Placeholders;
 import su.nightexpress.nightcore.util.wrapper.UniPermission;
 
 public class Perms {

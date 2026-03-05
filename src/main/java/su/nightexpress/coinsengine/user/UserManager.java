@@ -1,63 +1,63 @@
 package su.nightexpress.coinsengine.user;
 
-import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 import su.nightexpress.coinsengine.currency.CurrencyRegistry;
 import su.nightexpress.coinsengine.data.DataHandler;
-import su.nightexpress.coinsengine.data.DataQueries;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
-import su.nightexpress.coinsengine.data.impl.CurrencySettings;
-import su.nightexpress.nightcore.db.AbstractUserManager;
+import su.nightexpress.coinsengine.user.data.CurrencySettings;
+import su.nightexpress.nightcore.user.AbstractUserManager;
+import su.nightexpress.nightcore.user.data.DefaultUserDataAccessor;
 
+import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class UserManager extends AbstractUserManager<CoinsEnginePlugin, CoinsUser> {
 
-    private final DataHandler dataHandler;
     private final CurrencyRegistry registry;
 
-    public UserManager(@NotNull CoinsEnginePlugin plugin, @NotNull CurrencyRegistry registry, @NotNull DataHandler dataHandler) {
-        super(plugin, dataHandler);
-        this.dataHandler = dataHandler;
+    public UserManager(@NonNull CoinsEnginePlugin plugin, @NonNull CurrencyRegistry registry, @NonNull DataHandler dataHandler) {
+        super(plugin, new DefaultUserDataAccessor<>(dataHandler, dataHandler));
         this.registry = registry;
     }
 
     @Override
-    protected void onLoad() {
-        super.onLoad();
+    @NonNull
+    protected CoinsUser create(@NonNull UUID uuid, @NonNull String name, @NonNull InetAddress address) {
+        return this.create(uuid, name);
+    }
 
-        this.dataHandler.addTableSync(this.dataHandler.getUsersTable(), resultSet -> {
-            CoinsUser user = DataQueries.USER_LOADER.apply(resultSet);
-            this.handleSynchronization(user);
-        });
+    @NonNull
+    public CoinsUser create(@NonNull UUID uuid, @NonNull String name) {
+        UserBalance balance = new UserBalance();
+        Map<String, CurrencySettings> settingsMap = new HashMap<>();
+        long lastSeen = System.currentTimeMillis();
+        boolean hiddenFromTops = false;
+
+        this.registry.getCurrencies().forEach(currency -> balance.set(currency, currency.getStartValue()));
+
+        return new CoinsUser(uuid, name, balance, settingsMap, lastSeen, hiddenFromTops);
     }
 
     @Override
-    @NotNull
-    public CoinsUser create(@NotNull UUID uuid, @NotNull String name) {
-        long dateCreated = System.currentTimeMillis();
-
-        UserBalance balance = new UserBalance();
-        this.registry.getCurrencies().forEach(currency -> balance.set(currency, currency.getStartValue()));
-
-        Map<String, CurrencySettings> settingsMap = new HashMap<>();
-        boolean hiddenFromTops = false;
-
-        return new CoinsUser(uuid, name, dateCreated, dateCreated, balance, settingsMap, hiddenFromTops);
+    protected void handleJoin(@NonNull CoinsUser user) {
+        user.setLastSeen(System.currentTimeMillis());
     }
 
-    public void handleSynchronization(@NotNull CoinsUser fresh) {
-        CoinsUser user = this.getLoaded(fresh.getId());
-        if (user == null) return;
+    @Override
+    protected void handleQuit(@NonNull CoinsUser user) {
+        user.setLastSeen(System.currentTimeMillis());
+    }
 
-        for (Currency currency : this.registry.getCurrencies()) {
+    @Override
+    protected void synchronize(@NonNull CoinsUser fetched, @NonNull CoinsUser cached) {
+        for (ExcellentCurrency currency : this.registry.getCurrencies()) {
             if (!currency.isSynchronizable()) continue;
 
-            double balance = fresh.getBalance(currency);
-            user.getBalance().set(currency, balance); // Bypass balance event call.
+            double balance = fetched.getBalance(currency);
+            cached.getBalance().set(currency, balance); // Bypass balance event call.
         }
     }
 }

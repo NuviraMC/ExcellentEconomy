@@ -2,8 +2,8 @@ package su.nightexpress.coinsengine.currency;
 
 import org.jetbrains.annotations.NotNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.currency.operation.NotificationTarget;
-import su.nightexpress.coinsengine.currency.operation.OperationContext;
+import su.nightexpress.excellenteconomy.api.currency.operation.NotificationTarget;
+import su.nightexpress.excellenteconomy.api.currency.operation.OperationContext;
 import su.nightexpress.nightcore.util.TimeUtil;
 import su.nightexpress.nightcore.util.text.night.NightMessage;
 

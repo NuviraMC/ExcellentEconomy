@@ -2,51 +2,75 @@ package su.nightexpress.coinsengine.tops;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.Nullable;
-import su.nightexpress.coinsengine.COEFiles;
+import org.jspecify.annotations.NonNull;
+import su.nightexpress.coinsengine.EconomyFiles;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.Placeholders;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.coinsengine.EconomyPlaceholders;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
+import su.nightexpress.coinsengine.command.currency.CommandDefinition;
+import su.nightexpress.coinsengine.command.CommandManager;
 import su.nightexpress.coinsengine.config.Config;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.config.Perms;
 import su.nightexpress.coinsengine.currency.CurrencyRegistry;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
-import su.nightexpress.coinsengine.tops.command.TopCommandProvider;
+import su.nightexpress.coinsengine.tops.listener.TopListener;
+import su.nightexpress.coinsengine.tops.placeholder.ServerBalancePlaceholders;
+import su.nightexpress.coinsengine.tops.placeholder.TopBalancePlaceholders;
+import su.nightexpress.coinsengine.user.CoinsUser;
+import su.nightexpress.coinsengine.tops.command.TopCommand;
 import su.nightexpress.coinsengine.tops.menu.TopMenu;
+import su.nightexpress.coinsengine.user.UserManager;
+import su.nightexpress.nightcore.config.FileConfig;
 import su.nightexpress.nightcore.manager.AbstractManager;
 import su.nightexpress.nightcore.util.Lists;
 import su.nightexpress.nightcore.util.LowerCase;
 import su.nightexpress.nightcore.util.NumberUtil;
+import su.nightexpress.nightcore.util.placeholder.CommonPlaceholders;
+import su.nightexpress.nightcore.util.placeholder.PlaceholderContext;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 public class TopManager extends AbstractManager<CoinsEnginePlugin> {
 
     private final CurrencyRegistry currencyRegistry;
+    private final CommandManager   commandManager;
+    private final UserManager      userManager;
 
     private final Map<String, Map<String, TopEntry>> topEntries;
 
     private TopMenu topMenu;
 
-    public TopManager(@NotNull CoinsEnginePlugin plugin, @NotNull CurrencyRegistry currencyRegistry) {
+    public TopManager(@NonNull CoinsEnginePlugin plugin,
+                      @NonNull CurrencyRegistry currencyRegistry,
+                      @NonNull CommandManager commandManager,
+                      @NonNull UserManager userManager) {
         super(plugin);
         this.currencyRegistry = currencyRegistry;
+        this.commandManager = commandManager;
+        this.userManager = userManager;
         this.topEntries = new ConcurrentHashMap<>();
     }
 
     @Override
     protected void onLoad() {
+        this.plugin.injectLang(TopLang.class);
+
         if (Config.TOPS_USE_GUI.get()) {
-            this.topMenu = this.addMenu(new TopMenu(this.plugin, this), COEFiles.DIR_MENU, COEFiles.FILE_LEADERBOARD);
+            this.topMenu = new TopMenu(this.plugin, this);
+            this.topMenu.load(this.plugin, FileConfig.load(this.plugin.getDataFolder().toPath().resolve(EconomyFiles.DIR_MENU).resolve(TopFiles.FILE_LEADERBOARD)));
         }
 
-        this.plugin.getCommander().getCurrencyCommands().registerProvider(new TopCommandProvider(this.plugin, this));
+        this.loadCommands();
+        this.plugin.addGlobalPlaceholders(new ServerBalancePlaceholders(this));
+        this.plugin.addGlobalPlaceholders(new TopBalancePlaceholders(this.currencyRegistry, this));
 
-        this.addListener(new TopsListener(this.plugin, this));
+        this.addListener(new TopListener(this.plugin, this));
 
         this.addAsyncTask(this::updateBalances, Config.TOPS_UPDATE_INTERVAL.get());
     }
@@ -56,16 +80,21 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
         this.topEntries.clear();
     }
 
+    private void loadCommands() {
+        this.commandManager.addCurrencyCommand("top",
+            () -> new TopCommand(this),
+            CommandDefinition.allEnabled(TopDefaults.COMMAND_TOP,  "balancetop", "baltop"),
+            ExcellentCurrency::isLeaderboardEnabled
+        );
+    }
+
     public void updateBalances() {
         this.topEntries.clear();
 
-        List<CoinsUser> users = this.plugin.getDataHandler().getUsers();
+        Set<CoinsUser> users = this.userManager.getAll();
 
         users.removeIf(user -> {
-            Player player = user.getPlayer();
-            if (player != null) {
-                this.hideFromTops(player);
-            }
+            user.player().ifPresent(this::hideOrShowInTops);
             return user.isHiddenFromTops();
         });
 
@@ -81,14 +110,33 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
         });
     }
 
-    public void hideFromTops(@NotNull Player player) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
-        user.setHiddenFromTops(player.hasPermission(Perms.HIDE_FROM_TOPS));
+    public void handleJoin(@NonNull PlayerJoinEvent event) {
+        this.hideOrShowInTops(event.getPlayer());
     }
 
-    public boolean showLeaderboard(@NotNull CommandSender sender, @NotNull Currency currency, int page) {
+    public void handleQuit(@NonNull PlayerQuitEvent event) {
+        this.hideOrShowInTops(event.getPlayer());
+    }
+
+    public void hideOrShowInTops(@NonNull Player player) {
+        boolean state = player.hasPermission(Perms.HIDE_FROM_TOPS);
+        this.hideOrShowInTops(player, state);
+    }
+
+    public void hideOrShowInTops(@NonNull Player player, boolean state) {
+        this.hideOrShowInTops(this.userManager.getOrFetch(player), state);
+    }
+
+    public void hideOrShowInTops(@NonNull CoinsUser user, boolean state) {
+        if (user.isHiddenFromTops() != state) {
+            user.setHiddenFromTops(state);
+            user.markDirty();
+        }
+    }
+
+    public boolean showLeaderboard(@NonNull CommandSender sender, @NonNull ExcellentCurrency currency, int page) {
         if (sender instanceof Player player && this.topMenu != null) {
-            this.topMenu.open(player, currency);
+            this.topMenu.show(this.plugin, player, currency);
             return true;
         }
 
@@ -106,45 +154,45 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
         boolean hasNextPage = realPage < pages;
         boolean hasPrevPage = index > 0;
 
-        currency.sendPrefixed(Lang.TOP_LIST, sender, replacer -> replacer
-            .replace(Placeholders.GENERIC_NEXT_PAGE, () -> (hasNextPage ? Lang.TOP_LIST_NEXT_PAGE_ACTIVE : Lang.TOP_LIST_NEXT_PAGE_INACTIVE).text()
-                .replace(Placeholders.GENERIC_VALUE, String.valueOf(realPage + 1))
+        currency.sendPrefixed(Lang.TOP_LIST, sender, builder -> builder
+            .with(EconomyPlaceholders.GENERIC_NEXT_PAGE, () -> (hasNextPage ? Lang.TOP_LIST_NEXT_PAGE_ACTIVE : Lang.TOP_LIST_NEXT_PAGE_INACTIVE).text()
+                .replace(CommonPlaceholders.GENERIC_VALUE, String.valueOf(realPage + 1))
             )
-            .replace(Placeholders.GENERIC_PREVIOUS_PAGE, () -> (hasPrevPage ? Lang.TOP_LIST_PREVIOUS_PAGE_ACTIVE : Lang.TOP_LIST_PREVIOUS_PAGE_INACTIVE).text()
-                .replace(Placeholders.GENERIC_VALUE, String.valueOf(realPage - 1))
+            .with(EconomyPlaceholders.GENERIC_PREVIOUS_PAGE, () -> (hasPrevPage ? Lang.TOP_LIST_PREVIOUS_PAGE_ACTIVE : Lang.TOP_LIST_PREVIOUS_PAGE_INACTIVE).text()
+                .replace(CommonPlaceholders.GENERIC_VALUE, String.valueOf(realPage - 1))
             )
-            .replace(currency.replacePlaceholders())
-            .replace(Placeholders.GENERIC_CURRENT, realPage)
-            .replace(Placeholders.GENERIC_MAX, pages)
-            .replace(Placeholders.GENERIC_ENTRY, list -> {
-                for (TopEntry entry : entries) {
-                    list.add(Lang.TOP_ENTRY.text()
-                        .replace(Placeholders.GENERIC_POS, NumberUtil.format(entry.getPosition()))
-                        .replace(Placeholders.GENERIC_BALANCE, currency.format(entry.getBalance()))
-                        .replace(Placeholders.PLAYER_NAME, entry.getName()));
-                }
-            })
+            .with(currency.placeholders())
+            .with(EconomyPlaceholders.GENERIC_CURRENT, () -> String.valueOf(realPage))
+            .with(EconomyPlaceholders.GENERIC_MAX, () -> String.valueOf(pages))
+            .with(EconomyPlaceholders.GENERIC_ENTRY, () -> entries.stream().map(entry -> PlaceholderContext.builder()
+                    .with(EconomyPlaceholders.GENERIC_POS, () -> NumberUtil.format(entry.getPosition()))
+                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(entry.getBalance()))
+                    .with(CommonPlaceholders.PLAYER_NAME, entry::getName)
+                    .build()
+                    .apply(Lang.TOP_ENTRY.text())
+                ).collect(Collectors.joining("\n"))
+            )
         );
 
         return true;
     }
 
-    @NotNull
+    @NonNull
     public Map<String, Map<String, TopEntry>> getTopEntriesMap() {
         return this.topEntries;
     }
 
-    @NotNull
-    public List<TopEntry> getTopEntries(@NotNull Currency currency) {
+    @NonNull
+    public List<TopEntry> getTopEntries(@NonNull ExcellentCurrency currency) {
         return new ArrayList<>(this.topEntries.getOrDefault(currency.getId(), Collections.emptyMap()).values());
     }
 
     @Nullable
-    public TopEntry getTopEntry(@NotNull Currency currency, @NotNull String name) {
+    public TopEntry getTopEntry(@NonNull ExcellentCurrency currency, @NonNull String name) {
         return this.topEntries.getOrDefault(currency.getId(), Collections.emptyMap()).get(LowerCase.INTERNAL.apply(name));
     }
 
-    public double getTotalBalance(@NotNull Currency currency) {
+    public double getTotalBalance(@NonNull ExcellentCurrency currency) {
         return this.getTopEntries(currency).stream().mapToDouble(TopEntry::getBalance).sum();
     }
 }

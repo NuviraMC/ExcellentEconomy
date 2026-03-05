@@ -5,7 +5,7 @@ import org.black_ixx.playerpoints.manager.DataManager;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 import su.nightexpress.coinsengine.hook.HookPlugin;
 import su.nightexpress.coinsengine.migration.Migrator;
 
@@ -22,13 +22,13 @@ public class PlayerPointsMigrator extends Migrator {
     }
 
     @Override
-    public boolean canMigrate(@NotNull Currency currency) {
+    public boolean canMigrate(@NotNull ExcellentCurrency currency) {
         return true;
     }
 
     @Override
     @NotNull
-    public Map<OfflinePlayer, Double> getBalances(@NotNull Currency currency) {
+    public Map<OfflinePlayer, Double> getBalances(@NotNull ExcellentCurrency currency) {
         Map<OfflinePlayer, Double> balances = new HashMap<>();
 
         PlayerPoints playerPoints = (PlayerPoints) this.getBackend();

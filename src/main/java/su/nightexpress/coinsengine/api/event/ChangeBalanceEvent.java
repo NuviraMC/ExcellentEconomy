@@ -6,23 +6,23 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import su.nightexpress.coinsengine.api.currency.Currency;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
+import su.nightexpress.coinsengine.user.CoinsUser;
 
 public final class ChangeBalanceEvent extends Event implements Cancellable {
 
     private static final HandlerList HANDLER_LIST = new HandlerList();
 
-    private final CoinsUser user;
-    private final Currency  currency;
-    private final double    oldAmount;
+    private final CoinsUser         user;
+    private final ExcellentCurrency currency;
+    private final double            oldAmount;
     private final double    newAmount;
 
     private boolean cancelled;
 
-    public ChangeBalanceEvent(@NotNull CoinsUser user, @NotNull Currency currency, double oldAmount, double newAmount) {
+    public ChangeBalanceEvent(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency, double oldAmount, double newAmount) {
         super(!Bukkit.isPrimaryThread());
         this.user = user;
         this.currency = currency;
@@ -34,7 +34,7 @@ public final class ChangeBalanceEvent extends Event implements Cancellable {
         return HANDLER_LIST;
     }
 
-    @NotNull
+    @NonNull
     @Override
     public HandlerList getHandlers() {
         return HANDLER_LIST;
@@ -50,18 +50,18 @@ public final class ChangeBalanceEvent extends Event implements Cancellable {
         this.cancelled = cancelled;
     }
 
-    @NotNull
+    @NonNull
     public CoinsUser getUser() {
         return this.user;
     }
 
     @Nullable
     public Player getPlayer() {
-        return this.user.getPlayer();
+        return this.user.player().orElse(null);
     }
 
-    @NotNull
-    public Currency getCurrency() {
+    @NonNull
+    public ExcellentCurrency getCurrency() {
         return this.currency;
     }
 

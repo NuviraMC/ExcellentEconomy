@@ -2,19 +2,19 @@ package su.nightexpress.coinsengine.migration;
 
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
-import su.nightexpress.coinsengine.Placeholders;
-import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.coinsengine.EconomyPlaceholders;
+import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
+import su.nightexpress.coinsengine.command.CommandManager;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.currency.CurrencyManager;
 import su.nightexpress.coinsengine.currency.CurrencyRegistry;
-import su.nightexpress.coinsengine.data.DataHandler;
-import su.nightexpress.coinsengine.data.impl.CoinsUser;
 import su.nightexpress.coinsengine.hook.HookPlugin;
-import su.nightexpress.coinsengine.migration.command.MigrationCommands;
+import su.nightexpress.coinsengine.migration.command.MigrationCommand;
 import su.nightexpress.coinsengine.migration.impl.PlayerPointsMigrator;
+import su.nightexpress.coinsengine.user.CoinsUser;
 import su.nightexpress.coinsengine.user.UserManager;
 import su.nightexpress.nightcore.manager.SimpleManager;
 import su.nightexpress.nightcore.util.LowerCase;
@@ -25,21 +25,21 @@ import java.util.function.Supplier;
 
 public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
 
-    private final DataHandler dataHandler;
-    private final UserManager userManager;
     private final CurrencyRegistry currencyRegistry;
-    private final CurrencyManager currencyManager;
+    private final CurrencyManager  currencyManager;
+    private final CommandManager   commandManager;
+    private final UserManager      userManager;
 
     private final Map<String, Migrator> migrators;
 
-    public MigrationManager(@NotNull CoinsEnginePlugin plugin,
-                            @NotNull DataHandler dataHandler,
-                            @NotNull UserManager userManager,
-                            @NotNull CurrencyRegistry currencyRegistry,
-                            @NotNull CurrencyManager currencyManager) {
+    public MigrationManager(@NonNull CoinsEnginePlugin plugin,
+                            @NonNull CurrencyRegistry currencyRegistry,
+                            @NonNull CurrencyManager currencyManager,
+                            @NonNull CommandManager commandManager,
+                            @NonNull UserManager userManager) {
         super(plugin);
-        this.dataHandler = dataHandler;
         this.userManager = userManager;
+        this.commandManager = commandManager;
         this.currencyRegistry = currencyRegistry;
         this.currencyManager = currencyManager;
         this.migrators = new HashMap<>();
@@ -47,6 +47,8 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
 
     @Override
     protected void onLoad() {
+        this.commandManager.addPluginCommand(MigrationCommand.create(this.currencyRegistry, this));
+
         this.registerMigrator(HookPlugin.PLAYER_POINTS, () -> new PlayerPointsMigrator(this.plugin));
 
         // Schedule to ensure 3rd party economy plugins are loaded.
@@ -55,8 +57,6 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
                 this.registerMigrator(HookPlugin.VAULT, () -> MigratorFactory.forVault(this.plugin));
             }
         });
-
-        new MigrationCommands(this.plugin, this, this.currencyRegistry).load();
     }
 
     @Override
@@ -64,7 +64,7 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
         this.migrators.clear();
     }
 
-    public boolean registerMigrator(@NotNull String name, @NotNull Supplier<Migrator> supplier) {
+    public boolean registerMigrator(@NonNull String name, @NonNull Supplier<Migrator> supplier) {
         if (!Plugins.isInstalled(name)) return false;
 
         Migrator migrator = supplier.get();
@@ -76,7 +76,7 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
         return true;
     }
 
-    public boolean startMigration(@NotNull CommandSender sender, @NotNull String name, @NotNull Currency currency) {
+    public boolean startMigration(@NonNull CommandSender sender, @NonNull String name, @NonNull ExcellentCurrency currency) {
         if (!this.currencyManager.canPerformOperations()) {
             Lang.MIGRATION_START_BLOCKED.message().send(sender);
             return false;
@@ -89,54 +89,54 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
         }
 
         if (!migrator.canMigrate(currency)) {
-            Lang.MIGRATION_START_BAD_CURRENCY.message().send(sender, replacer -> replacer
-                .replace(Placeholders.GENERIC_NAME, migrator.getName())
-                .replace(currency.replacePlaceholders())
+            Lang.MIGRATION_START_BAD_CURRENCY.message().sendWith(sender, builder -> builder
+                .with(EconomyPlaceholders.GENERIC_NAME, migrator::getName)
+                .with(currency.placeholders())
             );
             return false;
         }
 
-        this.plugin.runTaskAsync(task -> {
+        this.plugin.runTaskAsync(() -> {
             this.currencyManager.disableOperations();
-            Lang.MIGRATION_STARTED.message().send(sender, replacer -> replacer.replace(Placeholders.GENERIC_NAME, migrator.getName()));
+            Lang.MIGRATION_STARTED.message().sendWith(sender, builder -> builder.with(EconomyPlaceholders.GENERIC_NAME, migrator::getName));
             this.migrate(migrator, currency);
-            Lang.MIGRATION_COMPLETED.message().send(sender, replacer -> replacer.replace(Placeholders.GENERIC_NAME, migrator.getName()));
+            Lang.MIGRATION_COMPLETED.message().sendWith(sender, builder -> builder.with(EconomyPlaceholders.GENERIC_NAME, migrator::getName));
             this.currencyManager.allowOperations();
         });
 
         return true;
     }
 
-    public void migrate(@NotNull Migrator migrator, @NotNull Currency currency) {
+    public void migrate(@NonNull Migrator migrator, @NonNull ExcellentCurrency currency) {
         Map<OfflinePlayer, Double> balances = migrator.getBalances(currency);
         balances.forEach((player, amount) -> {
             String name = player.getName();
             if (name == null) return;
 
             UUID uuid = player.getUniqueId();
-            CoinsUser user = this.userManager.getOrFetch(uuid);
+            CoinsUser user = this.userManager.getOrFetch(uuid).orElse(null);
             if (user == null) {
                 user = this.userManager.create(uuid, name);
-                this.dataHandler.insertUser(user);
+                this.userManager.getDataAccessor().insert(user);
             }
 
             user.setBalance(currency, amount);
-            this.userManager.save(user);
+            user.markDirty();
         });
     }
 
-    @NotNull
+    @NonNull
     public List<String> getMigratorNames() {
         return new ArrayList<>(this.migrators.keySet());
     }
 
-    @NotNull
+    @NonNull
     public Map<String, Migrator> getMigratorMap() {
         return this.migrators;
     }
 
     @Nullable
-    public Migrator getMigrator(@NotNull String name) {
+    public Migrator getMigrator(@NonNull String name) {
         return this.migrators.get(LowerCase.INTERNAL.apply(name));
     }
 }
