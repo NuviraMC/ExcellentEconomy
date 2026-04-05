@@ -14,16 +14,6 @@ public class Config {
         "[Deprecated]", "Always enabled since v2.7.0"
     );
 
-    public static final ConfigValue<Boolean> INTEGRATION_VAULT_ENABLED = ConfigValue.create("Integration.Vault.Enabled",
-        true,
-        "Controls whether Vault integration is enabled.",
-        WIKI_VAULT_HOOK
-    );
-
-    public static final ConfigValue<String> INTEGRATION_VAULT_ECONOMY_CURRENCY = ConfigValue.create("Integration.Vault.EconomyCurrency",
-        "money",
-        "Sets a currency used as primary sever economy using the Vault API."
-    );
 
     public static final ConfigValue<Boolean> TOPS_ENABLED = ConfigValue.create("Top.Enabled",
         true,

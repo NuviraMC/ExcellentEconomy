@@ -11,7 +11,6 @@ import su.nightexpress.coinsengine.command.CommandManager;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.currency.CurrencyManager;
 import su.nightexpress.coinsengine.currency.CurrencyRegistry;
-import su.nightexpress.coinsengine.hook.HookPlugin;
 import su.nightexpress.coinsengine.migration.command.MigrationCommand;
 import su.nightexpress.coinsengine.migration.impl.PlayerPointsMigrator;
 import su.nightexpress.coinsengine.user.CoinsUser;
@@ -49,14 +48,7 @@ public class MigrationManager extends SimpleManager<CoinsEnginePlugin> {
     protected void onLoad() {
         this.commandManager.addPluginCommand(MigrationCommand.create(this.currencyRegistry, this));
 
-        this.registerMigrator(HookPlugin.PLAYER_POINTS, () -> new PlayerPointsMigrator(this.plugin));
-
-        // Schedule to ensure 3rd party economy plugins are loaded.
-        this.plugin.runTask(() -> {
-            if (!this.currencyRegistry.hasPrimary()) {
-                this.registerMigrator(HookPlugin.VAULT, () -> MigratorFactory.forVault(this.plugin));
-            }
-        });
+        this.registerMigrator("PlayerPoints", () -> new PlayerPointsMigrator(this.plugin));
     }
 
     @Override

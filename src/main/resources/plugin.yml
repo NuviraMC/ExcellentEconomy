@@ -7,6 +7,5 @@ load: STARTUP
 api-version: 1.21
 depend: [ nightcore ]
 softdepend:
-  - Vault
   - PlaceholderAPI
   - PlayerPoints

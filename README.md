@@ -7,7 +7,7 @@
   <a href="https://nightexpressdev.com/excellenteconomy/"><b>Documentation</b></a>
 </p>
 
-**ExcellentEconomy** is a modern, lightweight economy plugin that lets you create unlimited custom currencies. You can finally manage your Coins, Points, Tokens, and any other currency in one place instead of using multiple plugins - with built-in **Vault** and **PlaceholderAPI** support.
+**ExcellentEconomy** is a modern, lightweight economy plugin that lets you create unlimited custom currencies. You can finally manage your Coins, Points, Tokens, and any other currency in one place instead of using multiple plugins - with built-in **PlaceholderAPI** support.
 
 Everything is designed for **total customization**, from text strings to in-game commands. You have the freedom to **change everything** to perfectly match your server's style and needs!
 
@@ -37,7 +37,7 @@ The plugin will be renamed to **ExcellentEconomy** in future releases. See [wiki
 
 ### 💾 Integrations & Database
 
-- **Plugin Support:** Built-in integration for Vault and PlaceholderAPI, ensuring compatibility with almost any other plugin.
+- **Plugin Support:** Built-in integration for PlaceholderAPI, ensuring compatibility with many other plugins.
 - **Database Options:** Choose between SQLite or MySQL for reliable data storage.
 - **Cross-Server Sync:** Share currency balances across multiple servers in your network.
 - **Developer API:** A robust API is available for developers to hook into the economy system.

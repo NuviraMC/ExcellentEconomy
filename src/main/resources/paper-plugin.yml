@@ -10,8 +10,6 @@ dependencies:
     nightcore:
       load: BEFORE
       required: true
-    Vault:
-      required: false
     PlaceholderAPI:
       required: false
     PlayerPoints:

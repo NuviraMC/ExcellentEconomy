@@ -3,7 +3,6 @@ package su.nightexpress.coinsengine.currency;
 import org.jspecify.annotations.NonNull;
 import su.nightexpress.excellenteconomy.api.ExcellentEconomyAPI;
 import su.nightexpress.coinsengine.currency.impl.AbstractCurrency;
-import su.nightexpress.coinsengine.currency.impl.EconomyCurrency;
 import su.nightexpress.coinsengine.currency.impl.NormalCurrency;
 import su.nightexpress.coinsengine.data.DataHandler;
 import su.nightexpress.coinsengine.user.UserManager;
@@ -21,7 +20,7 @@ public class CurrencyFactory {
                                                  @NonNull CurrencyManager currencyManager,
                                                  @NonNull DataHandler dataHandler,
                                                  @NonNull UserManager userManager) {
-        return new EconomyCurrency(path, id, plugin, currencyManager, dataHandler, userManager);
+        return new NormalCurrency(path, id);
     }
 
     @NonNull

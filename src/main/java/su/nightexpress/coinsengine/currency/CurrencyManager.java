@@ -23,7 +23,6 @@ import su.nightexpress.excellenteconomy.api.currency.operation.OperationResult;
 import su.nightexpress.coinsengine.currency.placeholder.PlayerBalancePlaceholders;
 import su.nightexpress.coinsengine.data.DataColumns;
 import su.nightexpress.coinsengine.data.DataHandler;
-import su.nightexpress.coinsengine.hook.HookPlugin;
 import su.nightexpress.coinsengine.user.CoinsUser;
 import su.nightexpress.coinsengine.user.UserManager;
 import su.nightexpress.coinsengine.user.data.CurrencySettings;
@@ -31,7 +30,6 @@ import su.nightexpress.nightcore.config.FileConfig;
 import su.nightexpress.nightcore.core.config.CoreLang;
 import su.nightexpress.nightcore.manager.AbstractManager;
 import su.nightexpress.nightcore.util.FileUtil;
-import su.nightexpress.nightcore.util.Plugins;
 import su.nightexpress.nightcore.util.Strings;
 import su.nightexpress.nightcore.util.bukkit.NightItem;
 import su.nightexpress.nightcore.util.placeholder.CommonPlaceholders;
@@ -139,12 +137,6 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
             FileConfig config = FileConfig.load(path);
             if (!config.contains("Economy")) return;
 
-            if (config.getBoolean("Economy.Vault")) {
-                String name = fileName.substring(0, fileName.length() - FileConfig.EXTENSION.length());
-                Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.set(name);
-                Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.write(this.plugin.getConfig());
-            }
-
             config.remove("Economy");
             config.saveChanges();
         });
@@ -216,17 +208,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
         String name = fileName.substring(0, fileName.length() - FileConfig.EXTENSION.length());
         String id = Strings.varStyle(name).orElseThrow(() -> new IllegalStateException("Malformed file name '" + fileName + "'"));
 
-        boolean isVault = Plugins.isInstalled(HookPlugin.VAULT) && Config.INTEGRATION_VAULT_ENABLED.get();
-        boolean isGoodId = Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.get().equalsIgnoreCase(id);
-
-        AbstractCurrency currency;
-
-        if (isVault && isGoodId) {
-            currency = CurrencyFactory.createEconomy(path, id, this.plugin.getAPI(), this, this.dataHandler, this.userManager);
-        }
-        else {
-            currency = CurrencyFactory.createNormal(path, id);
-        }
+        AbstractCurrency currency = CurrencyFactory.createNormal(path, id);
 
         // Useless until we remake the plugin reload system.
         if (currency.isPrimary() && this.registry.hasPrimary()) {
