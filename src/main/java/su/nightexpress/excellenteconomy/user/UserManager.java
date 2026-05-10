@@ -13,6 +13,7 @@ import su.nightexpress.nightcore.user.data.DefaultUserDataAccessor;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public class UserManager extends AbstractUserManager<EconomyPlugin, CoinsUser> {
@@ -51,6 +52,7 @@ public class UserManager extends AbstractUserManager<EconomyPlugin, CoinsUser> {
     @Override
     protected void handleQuit(@NonNull CoinsUser user) {
         user.setLastSeen(System.currentTimeMillis());
+        this.getDataAccessor().save(user);
     }
 
     @Override
@@ -58,8 +60,31 @@ public class UserManager extends AbstractUserManager<EconomyPlugin, CoinsUser> {
         for (ExcellentCurrency currency : this.registry.getCurrencies()) {
             if (!currency.isSynchronizable()) continue;
 
-            double balance = fetched.getBalance(currency);
-            cached.getBalance().set(currency, balance); // Bypass balance event call.
+            double fetchedBalance = fetched.getBalance(currency);
+            double cachedBalance = cached.getBalance(currency);
+
+            if (fetchedBalance != cachedBalance) {
+                cached.getBalance().set(currency, fetchedBalance);
+            }
         }
+    }
+
+    @NonNull
+    public Optional<CoinsUser> getOrFetch(@NonNull UUID uuid) {
+        CoinsUser cached = this.getCachedUser(uuid);
+        if (cached != null) return Optional.of(cached);
+
+        return this.getDataAccessor().load(uuid);
+    }
+
+    @NonNull
+    public Optional<CoinsUser> getOrFetch(@NonNull String name) {
+        CoinsUser cached = this.getOnlineUsers().stream()
+            .filter(u -> u.getName().equalsIgnoreCase(name))
+            .findFirst()
+            .orElse(null);
+        if (cached != null) return Optional.of(cached);
+
+        return this.getDataAccessor().load(name);
     }
 }

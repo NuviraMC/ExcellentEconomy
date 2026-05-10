@@ -24,7 +24,6 @@ import su.nightexpress.excellenteconomy.currency.impl.NormalCurrency;
 import su.nightexpress.excellenteconomy.currency.placeholder.PlayerBalancePlaceholders;
 import su.nightexpress.excellenteconomy.data.DataColumns;
 import su.nightexpress.excellenteconomy.data.DataHandler;
-import su.nightexpress.excellenteconomy.hook.HookPlugin;
 import su.nightexpress.excellenteconomy.user.CoinsUser;
 import su.nightexpress.excellenteconomy.user.UserManager;
 import su.nightexpress.excellenteconomy.user.data.CurrencySettings;
@@ -32,7 +31,6 @@ import su.nightexpress.nightcore.config.FileConfig;
 import su.nightexpress.nightcore.core.config.CoreLang;
 import su.nightexpress.nightcore.manager.AbstractManager;
 import su.nightexpress.nightcore.util.FileUtil;
-import su.nightexpress.nightcore.util.Plugins;
 import su.nightexpress.nightcore.util.Strings;
 import su.nightexpress.nightcore.util.bukkit.NightItem;
 import su.nightexpress.nightcore.util.placeholder.CommonPlaceholders;
@@ -134,12 +132,6 @@ public class CurrencyManager extends AbstractManager<EconomyPlugin> {
             FileConfig config = FileConfig.load(path);
             if (!config.contains("Economy")) return;
 
-            if (config.getBoolean("Economy.Vault")) {
-                String name = fileName.substring(0, fileName.length() - FileConfig.EXTENSION.length());
-                Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.set(name);
-                Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.write(this.plugin.getConfig());
-            }
-
             config.remove("Economy");
             config.saveChanges();
         });
@@ -212,18 +204,7 @@ public class CurrencyManager extends AbstractManager<EconomyPlugin> {
         String id = Strings.varStyle(name).orElseThrow(() -> new IllegalStateException("Malformed file name '" +
             fileName + "'"));
 
-        boolean isVault = Plugins.isInstalled(HookPlugin.VAULT) && Config.INTEGRATION_VAULT_ENABLED.get();
-        boolean isGoodId = Config.INTEGRATION_VAULT_ECONOMY_CURRENCY.get().equalsIgnoreCase(id);
-
-        AbstractCurrency currency;
-
-        if (isVault && isGoodId) {
-            currency = CurrencyFactory.createEconomy(path, id, this.plugin.getAPI(), this, this.dataHandler,
-                this.userManager);
-        }
-        else {
-            currency = CurrencyFactory.createNormal(path, id);
-        }
+        AbstractCurrency currency = CurrencyFactory.createNormal(path, id);
 
         // Useless until we remake the plugin reload system.
         if (currency.isPrimary() && this.registry.hasPrimary()) {
@@ -249,580 +230,108 @@ public class CurrencyManager extends AbstractManager<EconomyPlugin> {
 
         this.createCurrency("money", currency -> {
             currency.setSymbol("$");
-            currency.setFormat(EconomyPlaceholders.CURRENCY_SYMBOL + EconomyPlaceholders.GENERIC_AMOUNT);
-            currency.setFormat(currency.getFormat());
-            currency.setIcon(NightItem.fromType(Material.GOLD_NUGGET));
-            currency.setDecimal(true);
+            currency.setFormat(EconomyPlaceholders.FORMATTED_BALANCE + currency.getSymbol());
+            currency.setIcon(NightItem.fromType(Material.EMERALD));
         });
+    }
+
+    public void createCurrency(@NonNull String name, @NonNull Consumer<NormalCurrency> consumer) {
+        Path path = Paths.get(this.getDirectory() + name + FileConfig.EXTENSION);
+        NormalCurrency currency = (NormalCurrency) CurrencyFactory.createNormal(path, name);
+        consumer.accept(currency);
+        currency.save();
     }
 
     private void loadLogger() throws IOException, IllegalArgumentException {
-        boolean logToConsole = Config.LOGS_TO_CONSOLE.get();
-        boolean logToFile = Config.LOGS_TO_FILE.get();
-        if (!logToConsole && !logToFile) return;
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(Config.LOGS_DATE_FORMAT.get());
-        Path filePath = Paths.get(this.plugin.getDataFolder().getAbsolutePath(), EconomyFiles.FILE_OPERATIONS);
-
-        this.logger = new CurrencyLogger(this.plugin, formatter, filePath, logToConsole, logToFile);
-        this.addAsyncTask(() -> this.logger.write(), Config.LOGS_WRITE_INTERVAL.get());
+        this.logger = new CurrencyLogger(this.plugin);
     }
 
-    public boolean registerCurrency(@NonNull ExcellentCurrency currency) {
-        if (this.registry.isRegistered(currency.getId())) {
-            this.plugin.error("Could not register duplicated currency: '" + currency.getId() + "'!");
-            return false;
-        }
-
-        if (DataColumns.containsCurrency(currency)) {
-            this.plugin.error("Currency '" + currency.getId() + "' tried to use column '" + currency.getColumnName() +
-                "' which is already used by other currency!");
-            return false;
-        }
-
+    public void registerCurrency(@NonNull AbstractCurrency currency) {
+        this.registry.register(currency);
+        this.dataHandler.createCurrencyColumns(currency);
         currency.onRegister();
-        this.registry.add(currency);
-        this.dataHandler.onCurrencyRegister(currency);
-
-        this.plugin.info("Currency registered: '" + currency.getId() + "'.");
-        return true;
+        this.plugin.info("Loaded currency: '" + currency.getId() + "'.");
     }
 
-    /**
-     * Injects a new currency into the plugin, making it available for use by players
-     * and other integrated plugins.
-     *
-     * <p>Unlike {@link #registerCurrency(ExcellentCurrency)}, this method also handles the
-     * registration of commands associated with the currency if they are not
-     * already present.</p>
-     *
-     * @param currency the non-null {@link ExcellentCurrency} instance to be injected
-     * @return {@code true} if the currency was successfully injected;
-     *         {@code false} if the injection failed or the currency was already managed
-     */
-    public boolean injectCurrency(@NonNull ExcellentCurrency currency) {
-        if (!this.registerCurrency(currency)) return false;
-
-        if (!this.commandManager.hasRegisteredCommands(currency)) {
-            this.commandManager.registerCurrencyCommands(currency);
-        }
-
-        return true;
-    }
-
-    public boolean unregisterCurrency(@NonNull ExcellentCurrency currency) {
-        return this.unregisterCurrency(currency.getId());
-    }
-
-    public boolean unregisterCurrency(@NonNull String id) {
-        ExcellentCurrency currency = this.registry.remove(id);
-        if (currency == null) return false;
-
+    private void unregisterCurrency(@NonNull AbstractCurrency currency) {
         currency.onUnregister();
-        this.dataHandler.onCurrencyUnload(currency);
-        this.plugin.info("Currency unregistered: '" + currency.getId() + "'.");
-        return true;
-    }
-
-    @NonNull
-    public NormalCurrency createCurrency(@NonNull String id, @NonNull Consumer<NormalCurrency> consumer) {
-        Path path = Paths.get(this.getDirectory(), FileConfig.withExtension(id));
-        NormalCurrency currency = new NormalCurrency(path, id);
-
-        consumer.accept(currency);
-        currency.write();
-        return currency;
-    }
-
-    public boolean createCurrency(@NonNull CommandSender sender, @NonNull String name, @NonNull String symbol,
-                                  boolean decimals) {
-        String id = Strings.varStyle(name).orElse(null);
-        if (id == null) {
-            Lang.CURRENCY_CREATE_BAD_NAME.message().send(sender);
-            return false;
-        }
-
-        if (this.registry.isRegistered(id)) {
-            Lang.CURRENCY_CREATE_DUPLICATED.message().send(sender);
-            return false;
-        }
-
-        NormalCurrency created = this.createCurrency(id, currency -> {
-            currency.setSymbol(symbol);
-            currency.setDecimal(decimals);
-        });
-
-        created.updateMessagePrefix();
-
-        this.injectCurrency(created);
-
-        Lang.CURRENCY_CREATE_SUCCESS.message().sendWith(sender, builder -> builder.with(created.placeholders()));
-        return true;
-    }
-
-    public void resetBalances(@NonNull CommandSender sender) {
-        this.resetBalances(sender, null);
-    }
-
-    public void resetBalances(@NonNull CommandSender sender, @Nullable ExcellentCurrency currency) {
-        if (!this.canPerformOperations()) {
-            Lang.RESET_ALL_START_BLOCKED.message().send(sender);
-            return;
-        }
-
-        this.plugin.runTaskAsync(() -> {
-            this.disableOperations();
-            if (currency == null) {
-                Collection<ExcellentCurrency> currencies = this.registry.getCurrencies();
-
-                Lang.RESET_ALL_STARTED_GLOBAL.message().send(sender);
-                this.dataHandler.resetBalances(currencies);
-                this.userManager.getRepository().getAll().forEach(user -> user.resetBalance(currencies));
-                Lang.RESET_ALL_COMPLETED_GLOBAL.message().send(sender);
-            }
-            else {
-                Lang.RESET_ALL_STARTED_CURRENCY.message().sendWith(sender, builder -> builder.with(currency
-                    .placeholders()));
-                this.dataHandler.resetBalances(currency);
-                this.userManager.getRepository().getAll().forEach(user -> user.resetBalance(currency));
-                Lang.RESET_ALL_COMPLETED_CURRENCY.message().sendWith(sender, builder -> builder.with(currency
-                    .placeholders()));
-            }
-            this.allowOperations();
-        });
-    }
-
-    public boolean getPaymentsState(@NonNull Player player, @NonNull ExcellentCurrency currency) {
-        return this.getPaymentsState(this.userManager.getOrFetch(player), currency);
-    }
-
-    public boolean getPaymentsState(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency) {
-        return user.getSettings(currency).isPaymentsEnabled();
-    }
-
-    public void showBalance(@NonNull Player player, @NonNull ExcellentCurrency currency) {
-        this.showBalance(player, this.userManager.getOrFetch(player), currency);
-    }
-
-    public void showBalance(@NonNull CommandSender sender, @NonNull CoinsUser user,
-                            @NonNull ExcellentCurrency currency) {
-        currency.sendPrefixed((user.isHolder(
-            sender) ? Lang.CURRENCY_BALANCE_DISPLAY_OWN : Lang.CURRENCY_BALANCE_DISPLAY_OTHERS), sender,
-            builder -> builder
-                .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-                .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-        );
-    }
-
-    public boolean showWallet(@NonNull Player player) {
-        return this.showWallet(player, this.userManager.getOrFetch(player));
-    }
-
-    public boolean showWallet(@NonNull CommandSender sender, @NonNull CoinsUser user) {
-        (user.isHolder(sender) ? Lang.CURRENCY_WALLET_OWN : Lang.CURRENCY_WALLET_OTHERS).message().sendWith(sender,
-            builder -> builder
-                .with(EconomyPlaceholders.GENERIC_ENTRY, () -> this.registry.stream()
-                    .filter(currency -> !(sender instanceof Player player) || currency.hasPermission(player))
-                    .sorted(Comparator.comparing(ExcellentCurrency::getId))
-                    .map(currency -> PlaceholderContext.builder()
-                        .with(currency.placeholders())
-                        .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                        .build()
-                        .apply(Lang.CURRENCY_WALLET_ENTRY.text())
-                    ).collect(Collectors.joining("\n")))
-                .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-        );
-
-        return true;
-    }
-
-    public boolean togglePayments(@NonNull Player player, @NonNull ExcellentCurrency currency) {
-        CoinsUser user = this.userManager.getOrFetch(player);
-
-        return this.togglePayments(user, currency, false);
-    }
-
-    public boolean togglePayments(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency, boolean silent) {
-        CurrencySettings settings = user.getSettings(currency);
-        settings.setPaymentsEnabled(!settings.isPaymentsEnabled());
-        user.markDirty();
-
-        Player target = user.player().orElse(null);
-        if (!silent && target != null) {
-            currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TOGGLE, target, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_STATE, () -> CoreLang.STATE_ENABLED_DISALBED.get(settings
-                    .isPaymentsEnabled()))
-            );
-        }
-
-        return true;
-    }
-
-    public double getBalance(@NonNull Player player, @NonNull ExcellentCurrency currency) {
-        return this.getBalance(this.userManager.getOrFetch(player), currency);
-    }
-
-    public double getBalance(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency) {
-        return user.getBalance(currency);
-    }
-
-    @NonNull
-    public OperationResult give(@NonNull OperationContext context, @NonNull Player player,
-                                @NonNull ExcellentCurrency currency, double amount) {
-        return this.give(context, this.userManager.getOrFetch(player), currency, amount);
+        this.registry.unregister(currency);
     }
 
     @NonNull
     public OperationResult give(@NonNull OperationContext context, @NonNull CoinsUser user,
                                 @NonNull ExcellentCurrency currency, double amount) {
         if (!this.assertOperationsEnabled(context)) return OperationResult.FAILURE;
-
-        OperationExecutor executor = context.getExecutor();
-
-        user.addBalance(currency, amount);
-        user.markDirty();
-
-        if (this.logger != null && context.shouldNotifyLogger()) {
-            this.logger.addEntry(context, "[%s] %s gave %s to %s. New balance: %s"
-                .formatted(currency.getId(), executor.getName(), currency.format(amount), user.getName(), currency
-                    .format(user.getBalance(currency)))
-            );
-        }
-
-        if (context.shouldNotify(NotificationTarget.EXECUTOR)) {
-            executor.getBukkitSender().ifPresent(sender -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_GIVE_DONE, sender, builder -> builder
-                    .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        if (context.shouldNotify(NotificationTarget.USER)) {
-            user.player().ifPresent(target -> currency.sendPrefixed(Lang.COMMAND_CURRENCY_GIVE_NOTIFY, target,
-                builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-            ));
-        }
-
-        return OperationResult.SUCCESS;
-    }
-
-    @NonNull
-    public OperationResult giveAll(@NonNull OperationContext context, @NonNull ExcellentCurrency currency,
-                                   double amount) {
-        if (!this.assertOperationsEnabled(context)) return OperationResult.FAILURE;
-
-        OperationExecutor executor = context.getExecutor();
-        Set<CoinsUser> users = this.userManager.getRepository().getAll();
-        int size = users.size();
-        String names = users.stream().map(CoinsUser::getName).collect(Collectors.joining(", "));
-
-        users.forEach(user -> {
-            Player target = user.player().orElse(null);
-            if (target == null) return; // Only online players should be affected.
-
-            user.addBalance(currency, amount);
-            user.markDirty();
-
-            if (context.shouldNotify(NotificationTarget.USER)) {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_GIVE_NOTIFY, target, builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            }
-        });
-
-        if (this.logger != null && context.shouldNotifyLogger()) {
-            this.logger.addEntry(context, "[%s] %s gave %s to all online players. Affected players (%s): %s"
-                .formatted(currency.getId(), executor.getName(), currency.format(amount), size, names)
-            );
-        }
-
-        if (context.shouldNotify(NotificationTarget.EXECUTOR)) {
-            executor.getBukkitSender().ifPresent(sender -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_GIVE_ALL_DONE, sender, builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                );
-            });
-        }
-
-        return OperationResult.SUCCESS;
-    }
-
-    @NonNull
-    public OperationResult remove(@NonNull OperationContext context, @NonNull Player player,
-                                  @NonNull ExcellentCurrency currency, double amount) {
-        return this.remove(context, this.userManager.getOrFetch(player), currency, amount);
+        return OperationExecutor.give(context, user, currency, amount);
     }
 
     @NonNull
     public OperationResult remove(@NonNull OperationContext context, @NonNull CoinsUser user,
                                   @NonNull ExcellentCurrency currency, double amount) {
         if (!this.assertOperationsEnabled(context)) return OperationResult.FAILURE;
-
-        OperationExecutor executor = context.getExecutor();
-
-        user.removeBalance(currency, amount);
-        user.markDirty();
-
-        if (this.logger != null && context.shouldNotifyLogger()) {
-            this.logger.addEntry(context, "[%s] %s took %s from %s's balance. New balance: %s"
-                .formatted(currency.getId(), executor.getName(), currency.format(amount), user.getName(), currency
-                    .format(user.getBalance(currency))));
-        }
-
-        if (context.shouldNotify(NotificationTarget.EXECUTOR)) {
-            executor.getBukkitSender().ifPresent(sender -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_TAKE_DONE, sender, builder -> builder
-                    .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        if (context.shouldNotify(NotificationTarget.USER)) {
-            user.player().ifPresent(target -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_TAKE_NOTIFY, target, builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        return OperationResult.SUCCESS;
-    }
-
-    @NonNull
-    public OperationResult set(@NonNull OperationContext context, @NonNull Player player,
-                               @NonNull ExcellentCurrency currency, double amount) {
-        return this.set(context, this.userManager.getOrFetch(player), currency, amount);
+        return OperationExecutor.remove(context, user, currency, amount);
     }
 
     @NonNull
     public OperationResult set(@NonNull OperationContext context, @NonNull CoinsUser user,
                                @NonNull ExcellentCurrency currency, double amount) {
         if (!this.assertOperationsEnabled(context)) return OperationResult.FAILURE;
+        return OperationExecutor.set(context, user, currency, amount);
+    }
 
-        OperationExecutor executor = context.getExecutor();
-
-        user.setBalance(currency, amount);
-        user.markDirty();
-
-        if (this.logger != null && context.shouldNotifyLogger()) {
-            this.logger.addEntry(context, "[%s] %s set %s's balance to %s. New balance: %s"
-                .formatted(currency.getId(), executor.getName(), user.getName(), currency.format(amount), currency
-                    .format(user.getBalance(currency)))
-            );
-        }
-
-        if (context.shouldNotify(NotificationTarget.EXECUTOR)) {
-            executor.getBukkitSender().ifPresent(sender -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_SET_DONE, sender, builder -> builder
-                    .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        if (context.shouldNotify(NotificationTarget.USER)) {
-            user.player().ifPresent(target -> {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_SET_NOTIFY, target, builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        return OperationResult.SUCCESS;
+    public void transfer(@NonNull OperationContext context, @NonNull CoinsUser from, @NonNull CoinsUser to,
+                         @NonNull ExcellentCurrency currency, double amount) {
+        if (!this.assertOperationsEnabled(context)) return;
+        OperationExecutor.transfer(context, from, to, currency, amount);
     }
 
     @NonNull
-    public OperationResult reset(@NonNull OperationContext context, @NonNull Player player,
-                                 @NonNull ExcellentCurrency currency) {
-        return this.reset(context, this.userManager.getOrFetch(player), currency);
+    public OperationResult exchange(@NonNull Player player, @NonNull CoinsUser user,
+                                    @NonNull ExcellentCurrency from, @NonNull ExcellentCurrency to, double amount) {
+        if (!this.assertOperationsEnabled(OperationContext.player(player))) return OperationResult.FAILURE;
+        return OperationExecutor.exchange(OperationContext.player(player), user, from, to, amount);
     }
 
-    @NonNull
-    public OperationResult reset(@NonNull OperationContext context, @NonNull CoinsUser user,
-                                 @NonNull ExcellentCurrency currency) {
-        if (!this.assertOperationsEnabled(context)) return OperationResult.FAILURE;
-
-        OperationExecutor executor = context.getExecutor();
-
-        user.resetBalance(currency);
-        user.markDirty();
-
-        if (this.logger != null && context.shouldNotifyLogger()) {
-            this.logger.addEntry(context, "[%s] %s reset %s's balance of %s to %s."
-                .formatted(currency.getId(), executor.getName(), user.getName(), currency.getName(), currency.format(
-                    user.getBalance(currency)))
-            );
-        }
-
-        if (context.shouldNotify(NotificationTarget.EXECUTOR)) {
-            executor.getBukkitSender().ifPresent(sender -> {
-                currency.sendPrefixed(Lang.CURRENCY_OPERATION_RESET_FEEDBACK, sender, builder -> builder
-                    .with(CommonPlaceholders.PLAYER_NAME, user::getName)
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        if (context.shouldNotify(NotificationTarget.USER)) {
-            user.player().ifPresent(target -> {
-                currency.sendPrefixed(Lang.CURRENCY_OPERATION_RESET_NOTIFY, target, builder -> builder
-                    .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(user.getBalance(currency)))
-                );
-            });
-        }
-
-        return OperationResult.SUCCESS;
-    }
-
-    public boolean send(@NonNull Player sender, @NonNull CoinsUser targetUser, @NonNull ExcellentCurrency currency,
-                        double rawAmount) {
-        OperationContext context = OperationContext.of(sender);
-
-        if (!this.assertOperationsEnabled(context)) return false;
-
-        if (targetUser.isHolder(sender)) {
-            currency.sendPrefixed(CoreLang.COMMAND_EXECUTION_NOT_YOURSELF, sender);
-            return false;
-        }
-
-        double amount = currency.floorIfNeeded(rawAmount);
-        if (amount <= 0D) return false;
-
-        double minAmount = currency.getMinTransferAmount();
-        if (minAmount > 0 && amount < minAmount) {
-            currency.sendPrefixed(Lang.CURRENCY_SEND_ERROR_TOO_LOW, sender, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(minAmount))
-            );
-            return false;
-        }
-
-        CoinsUser fromUser = this.userManager.getOrFetch(sender);
-        if (amount > fromUser.getBalance(currency)) {
-            currency.sendPrefixed(Lang.CURRENCY_SEND_ERROR_NOT_ENOUGH, sender);
-            return false;
-        }
-
-        CurrencySettings settings = targetUser.getSettings(currency);
-        if (!settings.isPaymentsEnabled()) {
-            currency.sendPrefixed(Lang.CURRENCY_SEND_ERROR_NO_PAYMENTS, sender, builder -> builder
-                .with(CommonPlaceholders.PLAYER_NAME, targetUser::getName)
-            );
-            return false;
-        }
-
-        targetUser.addBalance(currency, amount);
-        targetUser.markDirty();
-        fromUser.removeBalance(currency, amount);
-        fromUser.markDirty();
-
-        currency.sendPrefixed(Lang.CURRENCY_SEND_DONE_SENDER, sender, builder -> builder
-            .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-            .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(fromUser.getBalance(currency)))
-            .with(CommonPlaceholders.PLAYER_NAME, targetUser::getName)
-        );
-
-        targetUser.player().ifPresent(target -> {
-            currency.sendPrefixed(Lang.CURRENCY_SEND_NOTIFY, target, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> currency.format(amount))
-                .with(EconomyPlaceholders.GENERIC_BALANCE, () -> currency.format(targetUser.getBalance(currency)))
-                .with(CommonPlaceholders.PLAYER.resolver(sender))
-            );
+    public void resetAll(@NonNull CommandSender sender, @NonNull ExcellentCurrency currency) {
+        this.plugin.runTaskAsync(() -> {
+            this.disableOperations();
+            Lang.CURRENCY_RESET_ALL_STARTED.message().sendWith(sender,
+                builder -> builder.with(currency.placeholders()));
+            this.dataHandler.resetBalances(currency);
+            this.userManager.getOnlineUsers().forEach(user -> user.setBalance(currency, currency.getStartValue()));
+            Lang.CURRENCY_RESET_ALL_DONE.message().sendWith(sender, builder -> builder.with(currency.placeholders()));
+            this.allowOperations();
         });
-
-        if (this.logger != null) {
-            this.logger.addEntry(context, "[%s] %s paid %s to %s. New balances: %s and %s.".formatted(
-                currency.getId(),
-                sender.getName(),
-                currency.format(amount),
-                targetUser.getName(),
-                currency.format(fromUser.getBalance(currency)),
-                currency.format(targetUser.getBalance(currency))
-            ));
-        }
-
-        return true;
     }
 
-    public boolean exchange(@NonNull Player player, @NonNull ExcellentCurrency sourceCurrency,
-                            @NonNull ExcellentCurrency targetCurrency, double initAmount) {
-        OperationContext context = OperationContext.of(player);
+    public boolean isEnoughBalance(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency, double required) {
+        double balance = user.getBalance(currency);
+        return balance >= required;
+    }
 
-        if (!this.assertOperationsEnabled(context)) return false;
+    @NonNull
+    public Set<CoinsUser> findRichestUsers(@NonNull ExcellentCurrency currency, int amount) {
+        return this.userManager.getOnlineUsers().stream()
+            .sorted(Comparator.comparingDouble((CoinsUser u) -> u.getBalance(currency)).reversed())
+            .limit(amount)
+            .collect(Collectors.toSet());
+    }
 
-        if (!sourceCurrency.isExchangeAllowed()) {
-            sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_DISABLED, player);
-            return false;
-        }
+    @NonNull
+    public Collection<ExcellentCurrency> getCurrencies() {
+        return this.registry.getCurrencies();
+    }
 
-        double amount = sourceCurrency.floorIfNeeded(initAmount);
-        if (amount <= 0D) {
-            sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_LOW_AMOUNT, player);
-            return false;
-        }
+    @Nullable
+    public ExcellentCurrency getCurrency(@NonNull String id) {
+        return this.registry.getCurrency(id);
+    }
 
-        CoinsUser user = this.userManager.getOrFetch(player);
-        if (user.getBalance(sourceCurrency) < amount) {
-            sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_LOW_BALANCE, player, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> sourceCurrency.format(amount))
-            );
-            return false;
-        }
-
-        if (!sourceCurrency.canExchangeTo(targetCurrency)) {
-            sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_NO_RATE, player, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_NAME, targetCurrency::getName)
-            );
-            return false;
-        }
-
-        double result = sourceCurrency.getExchangeResult(targetCurrency, amount);
-        if (result <= 0D) {
-            sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_LOW_AMOUNT, player);
-            return false;
-        }
-
-        double newBalance = user.getBalance(targetCurrency) + result;
-        if (!targetCurrency.isUnderLimit(newBalance)) {
-            targetCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_ERROR_LIMIT_EXCEED, player, builder -> builder
-                .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> targetCurrency.format(result))
-                .with(EconomyPlaceholders.GENERIC_MAX, () -> targetCurrency.format(targetCurrency.getMaxValue()))
-            );
-            return false;
-        }
-
-        user.removeBalance(sourceCurrency, amount);
-        user.addBalance(targetCurrency, result);
-        user.markDirty();
-
-        sourceCurrency.sendPrefixed(Lang.CURRENCY_EXCHANGE_SUCCESS, player, builder -> builder
-            .with(EconomyPlaceholders.GENERIC_BALANCE, () -> sourceCurrency.format(amount))
-            .with(EconomyPlaceholders.GENERIC_AMOUNT, () -> targetCurrency.format(result))
-        );
-
-        if (this.logger != null) {
-            this.logger.addEntry(context, "[%s] %s exchanged %s for %s [%s]. New balances: %s and %s."
-                .formatted(
-                    sourceCurrency.getId(),
-                    user.getName(),
-                    sourceCurrency.format(amount),
-                    targetCurrency.format(result),
-                    targetCurrency.getId(),
-                    sourceCurrency.format(user.getBalance(sourceCurrency)),
-                    targetCurrency.format(user.getBalance(targetCurrency))
-                )
-            );
-        }
-
-        return true;
+    @NonNull
+    public PlaceholderContext balancePlaceholders(@NonNull CoinsUser user, @NonNull ExcellentCurrency currency) {
+        double balance = user.getBalance(currency);
+        return PlaceholderContext.create()
+            .with(CommonPlaceholders.GENERIC_AMOUNT, () -> currency.formatBalance(balance))
+            .with(DataColumns.COLUMN_BALANCE + "_" + currency.getId(), () -> String.valueOf(balance));
     }
 }

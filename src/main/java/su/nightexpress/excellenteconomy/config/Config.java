@@ -10,17 +10,6 @@ import su.nightexpress.nightcore.config.ConfigValue;
 
 public class Config {
 
-    public static final ConfigValue<Boolean> INTEGRATION_VAULT_ENABLED = ConfigValue.create("Integration.Vault.Enabled",
-        true,
-        "Enables Vault integration."
-    );
-
-    public static final ConfigValue<String> INTEGRATION_VAULT_ECONOMY_CURRENCY = ConfigValue.create(
-        "Integration.Vault.EconomyCurrency",
-        "money",
-        "Sets a currency used as primary sever economy using the Vault API."
-    );
-
     public static final ConfigValue<Boolean> TOPS_ENABLED = ConfigValue.create("Top.Enabled",
         true,
         "Turns the entire leaderboard system on or off.",

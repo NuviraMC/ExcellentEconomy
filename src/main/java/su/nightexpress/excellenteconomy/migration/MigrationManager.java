@@ -51,13 +51,6 @@ public class MigrationManager extends SimpleManager<EconomyPlugin> {
         this.commandManager.addPluginCommand(MigrationCommand.create(this.currencyRegistry, this));
 
         this.registerMigrator(HookPlugin.PLAYER_POINTS, () -> new PlayerPointsMigrator(this.plugin));
-
-        // Schedule to ensure 3rd party economy plugins are loaded.
-        this.plugin.runTask(() -> {
-            if (!this.currencyRegistry.hasPrimary()) {
-                this.registerMigrator(HookPlugin.VAULT, () -> MigratorFactory.forVault(this.plugin));
-            }
-        });
     }
 
     @Override
@@ -135,8 +128,8 @@ public class MigrationManager extends SimpleManager<EconomyPlugin> {
     }
 
     @NonNull
-    public Map<String, Migrator> getMigratorMap() {
-        return this.migrators;
+    public Map<String, Migrator> getMigrators() {
+        return migrators;
     }
 
     @Nullable
